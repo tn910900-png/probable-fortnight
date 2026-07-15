@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -239,10 +239,10 @@
                             <i data-lucide="key-round" class="w-4 h-4"></i>
                             <span>🔑 修改管理密碼</span>
                         </button>
-                        <!-- 重置展示資料按鈕 -->
+                        <!-- 清空報修案件按鈕 -->
                         <button onclick="resetDemoData()" class="bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg text-sm transition shadow flex items-center space-x-1">
-                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-                            <span>重設雲端資料</span>
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            <span>清空雲端報修案件</span>
                         </button>
                         <!-- 登出按鈕 -->
                         <button onclick="handleAdminLogout()" class="bg-slate-600 hover:bg-slate-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition shadow flex items-center space-x-1">
@@ -473,328 +473,395 @@
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // ==========================================
-        // 💡 雲端金鑰設定區 (如果您有自己的 Firebase，可填入下方以啟用 GitHub 跨裝置同步)
-        // ==========================================
         const MY_PERSONAL_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDlqNJwgfY8ZsVFsP6ltmncWfP93XXP-qk",
-  authDomain: "campus-repair-web.firebaseapp.com",
-  projectId: "campus-repair-web",
-  storageBucket: "campus-repair-web.firebasestorage.app",
-  messagingSenderId: "627776469227",
-  appId: "1:627776469227:web:7e4f17e395c59e595826ae",
-  measurementId: "G-RLHT727L6M"
-};
+            apiKey: "AIzaSyDlqNJwgfY8ZsVFsP6ltmncWfP93XXP-qk",
+            authDomain: "campus-repair-web.firebaseapp.com",
+            projectId: "campus-repair-web",
+            storageBucket: "campus-repair-web.firebasestorage.app",
+            messagingSenderId: "627776469227",
+            appId: "1:627776469227:web:9cbfcbffb06cb87c2b0bd7"
+        };
 
-        // 初始精美展示數據 (雲端建置初期或本地初期若為空，將會以此數據初始化)
-        const DEMO_REPAIRS = [
-            { id: "REP001", reporter: "王德明 老師", contact: "分機 #105", semester: "114學年度 第二學期", category: "空調冷氣", location: "教學大樓", detailLocation: "405 教室", description: "冷氣運轉有很大聲的異音，且不冷，吹出有異味的风。", urgency: "普通", status: "待處理", cost: 0, date: "2026-07-08 09:12", note: "" },
-            { id: "REP002", reporter: "李采芬 同學", contact: "0987-123456", semester: "114學年度 第二學期", category: "水電類", location: "活動中心", detailLocation: "一樓 女廁", description: "靠左邊數來第二個洗手台水管破裂，水龍頭打開會一直漏水漏到地板都是。", urgency: "緊急", status: "處理中", cost: 0, date: "2026-07-08 11:30", note: "已先關閉該水龍頭總閥，明早聯絡水電工修復。" },
-            { id: "REP003", reporter: "陳主任", contact: "分機 #201", semester: "114學年度 第一學期", category: "資訊設備類", location: "行政大樓", detailLocation: "三樓大會議室", description: "單槍投影機開機後，顯示畫面嚴重泛黃且偏暗，無法看清投影簡報。", urgency: "普通", status: "已完成", cost: 3500, date: "2026-06-15 14:00", note: "已更換投影機內部全新燈泡，顯示色彩已恢復正常色彩。" }
-        ];
-
-        const DEFAULT_SEMESTERS = ["114學年度 第一學期", "114學年度 第二學期", "115學年度 第一學期"];
-        const DEFAULT_LOCATIONS = ["教學大樓", "行政大樓", "活動中心", "體育館", "宿舍", "圖書館"];
-
-        // 初始化系統狀態與快取
-        let repairs = [];
-        let semesters = [];
-        let locations = [];
-        let adminSettings = { username: "admin", password: "admin1234" };
-        
-        // 記錄全域自訂確認框 Callback 函數
-        let confirmActionCallback = null;
-
-        // 智慧判斷：是否啟用 Firebase 雲端同步
-        let isCloudMode = false;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'campus-repair-demo-id';
         let db = null;
         let auth = null;
         let currentUser = null;
+        let isCloudConnected = false;
+        let unsubRepairs = null;
 
-        // 判斷平台提供的變數或使用者個人變數是否存在
-        const isEmbedConfigAvailable = typeof __firebase_config !== 'undefined' && __firebase_config;
-        const isPersonalConfigAvailable = MY_PERSONAL_FIREBASE_CONFIG && MY_PERSONAL_FIREBASE_CONFIG.apiKey;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'campus-repair-cloud-system';
-
-        // 頁面載入點
-        window.onload = function() {
-            initSystemMode();
-            lucide.createIcons();
+        // 本機記憶體資料庫 (已完全清空 repairs，不留任何預設通報範例)
+        let localState = {
+            repairs: [],
+            semesters: ["114學年度 第二學期", "115學年度 第一學期", "115學年度 第二學期"],
+            locations: ["行政大樓", "教學大樓", "科技大樓", "體育館", "活動中心", "圖書館"],
+            admin: {
+                username: "admin",
+                password: "admin1234"
+            }
         };
 
-        // 判斷執行模式
-        async function initSystemMode() {
-            updateSyncStatus("檢測運行環境...", "loading");
-
-            if (isEmbedConfigAvailable || isPersonalConfigAvailable) {
-                // 1. 啟用雲端同步模式
-                try {
-                    const firebaseConfig = isEmbedConfigAvailable 
-                        ? JSON.parse(__firebase_config) 
-                        : MY_PERSONAL_FIREBASE_CONFIG;
-                    
-                    const app = initializeApp(firebaseConfig);
-                    db = getFirestore(app);
-                    auth = getAuth(app);
-                    
-                    updateSyncStatus("安全認證中...", "loading");
-                    
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        const userCredential = await signInWithCustomToken(auth, __initial_auth_token);
-                        currentUser = userCredential.user;
-                    } else {
-                        const userCredential = await signInAnonymously(auth);
-                        currentUser = userCredential.user;
-                    }
-
-                    isCloudMode = true;
-                    updateSyncStatus("雲端已連線", "success");
-                    startRealtimeSync();
-
-                } catch (error) {
-                    console.error("雲端連線失敗，自動降級為本地端模式:", error);
-                    setupLocalStorageMode();
-                }
+        window.showToast = function(message, type = 'success') {
+            const toast = document.getElementById('custom-toast');
+            const toastMessage = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+            
+            toastMessage.textContent = message;
+            
+            if (type === 'success') {
+                toast.className = "fixed bottom-5 right-5 bg-emerald-600 text-white px-5 py-3.5 rounded-xl shadow-2xl z-50 flex items-center space-x-2 transform translate-y-0 opacity-100 transition-all duration-300";
+                toastIcon.setAttribute('data-lucide', 'check-circle');
+            } else if (type === 'error') {
+                toast.className = "fixed bottom-5 right-5 bg-red-600 text-white px-5 py-3.5 rounded-xl shadow-2xl z-50 flex items-center space-x-2 transform translate-y-0 opacity-100 transition-all duration-300";
+                toastIcon.setAttribute('data-lucide', 'alert-circle');
             } else {
-                // 2. 啟用本地 LocalStorage 儲存模式
-                setupLocalStorageMode();
+                toast.className = "fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl z-50 flex items-center space-x-2 transform translate-y-0 opacity-100 transition-all duration-300";
+                toastIcon.setAttribute('data-lucide', 'info');
             }
+            
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                toast.className = "fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl z-50 flex items-center space-x-2 transform translate-y-10 opacity-0 pointer-events-none transition-all duration-300";
+            }, 3000);
+        };
 
-            // 判斷當前是否處於登入狀態
-            const isLogged = sessionStorage.getItem('admin_logged_in');
-            if (isLogged === 'true') {
-                showAdminDashboard();
+        let confirmCallback = null;
+        window.openConfirmModal = function(title, message, callback, isDangerous = true) {
+            document.getElementById('confirm-modal-title').textContent = title;
+            document.getElementById('confirm-modal-message').textContent = message;
+            confirmCallback = callback;
+            
+            const btn = document.getElementById('confirm-modal-action-btn');
+            const iconContainer = document.getElementById('confirm-modal-icon-container');
+            const icon = document.getElementById('confirm-modal-icon');
+            
+            if (isDangerous) {
+                btn.className = "bg-red-600 hover:bg-red-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition shadow-md";
+                iconContainer.className = "bg-red-100 text-red-600 inline-flex p-4 rounded-full mb-4";
+                icon.setAttribute('data-lucide', 'alert-triangle');
             } else {
-                showAdminLoginCard();
+                btn.className = "bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition shadow-md";
+                iconContainer.className = "bg-indigo-100 text-indigo-600 inline-flex p-4 rounded-full mb-4";
+                icon.setAttribute('data-lucide', 'info');
             }
-        }
+            
+            lucide.createIcons();
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        };
 
-        // 設定為本地端運作模式
-        function setupLocalStorageMode() {
-            isCloudMode = false;
-            updateSyncStatus("本地儲存版", "offline");
+        window.closeConfirmModal = function() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            confirmCallback = null;
+        };
 
-            // 載入本地學期設定
-            semesters = JSON.parse(localStorage.getItem('sys_semesters'));
-            if (!semesters || semesters.length === 0) {
-                semesters = [...DEFAULT_SEMESTERS];
-                localStorage.setItem('sys_semesters', JSON.stringify(semesters));
-            }
+        window.executeConfirmAction = function() {
+            if (confirmCallback) confirmCallback();
+            window.closeConfirmModal();
+        };
 
-            // 載入本地地點設定
-            locations = JSON.parse(localStorage.getItem('sys_locations'));
-            if (!locations || locations.length === 0) {
-                locations = [...DEFAULT_LOCATIONS];
-                localStorage.setItem('sys_locations', JSON.stringify(locations));
-            }
-
-            // 載入本地報修歷史單據
-            repairs = JSON.parse(localStorage.getItem('repair_records'));
-            if (!repairs || repairs.length === 0) {
-                repairs = [...DEMO_REPAIRS];
-                localStorage.setItem('repair_records', JSON.stringify(repairs));
-            }
-
-            // 載入本地管理者帳密
-            const savedAdmin = JSON.parse(localStorage.getItem('repair_admin'));
-            if (savedAdmin) {
-                adminSettings = savedAdmin;
-            } else {
-                adminSettings = { username: "admin", password: "admin1234" };
-                localStorage.setItem('repair_admin', JSON.stringify(adminSettings));
-            }
-
-            // 更新介面
-            updateFormDropdowns();
-            filterRepairs();
-        }
-
-        // 即時監聽雲端資料庫
-        function startRealtimeSync() {
-            if (!currentUser || !isCloudMode) return;
-
-            // 1. 同步報修案件清單
-            const repairsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'repairs');
-            onSnapshot(repairsCollection, (snapshot) => {
-                repairs = [];
-                snapshot.forEach(docSnap => {
-                    repairs.push({ id: docSnap.id, ...docSnap.data() });
-                });
-                
-                // 由新到舊排序
-                repairs.sort((a, b) => b.date.localeCompare(a.date));
-
-                if (repairs.length === 0) {
-                    seedInitialCloudData();
-                } else {
-                    filterRepairs();
-                    if (sessionStorage.getItem('admin_logged_in') === 'true') {
-                        renderAdminDashboard();
-                    }
-                }
-                updateSyncStatus("雲端已同步", "success");
-            }, (error) => {
-                console.error("Repairs Sync Error:", error);
-                updateSyncStatus("同步出錯", "error");
-            });
-
-            // 2. 同步學期設定
-            const semestersDoc = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'semesters');
-            onSnapshot(semestersDoc, (docSnap) => {
-                if (docSnap.exists()) {
-                    semesters = docSnap.data().list || [];
-                } else {
-                    semesters = [...DEFAULT_SEMESTERS];
-                    setDoc(semestersDoc, { list: semesters });
-                }
-                updateFormDropdowns();
-                renderParametersLists();
-            }, (error) => console.error("Semesters Sync Error:", error));
-
-            // 3. 同步報修地點
-            const locationsDoc = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'locations');
-            onSnapshot(locationsDoc, (docSnap) => {
-                if (docSnap.exists()) {
-                    locations = docSnap.data().list || [];
-                } else {
-                    locations = [...DEFAULT_LOCATIONS];
-                    setDoc(locationsDoc, { list: locations });
-                }
-                updateFormDropdowns();
-                renderParametersLists();
-            }, (error) => console.error("Locations Sync Error:", error));
-
-            // 4. 同步管理者帳密
-            const adminDoc = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admin');
-            onSnapshot(adminDoc, (docSnap) => {
-                if (docSnap.exists()) {
-                    adminSettings = docSnap.data();
-                } else {
-                    adminSettings = { username: "admin", password: "admin1234" };
-                    setDoc(adminDoc, adminSettings);
-                }
-            }, (error) => console.error("Admin Sync Error:", error));
-        }
-
-        // 在雲端資料庫首次佈署時注入範例
-        async function seedInitialCloudData() {
-            updateSyncStatus("初始化雲端中...", "loading");
+        async function initFirebaseAndSync() {
+            const statusDot = document.getElementById('cloud-status-dot');
+            const statusText = document.getElementById('cloud-status-text');
+            
             try {
-                const repairsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'repairs');
-                for (const item of DEMO_REPAIRS) {
-                    await setDoc(doc(repairsCollection, item.id), item);
+                let config = null;
+                if (typeof __firebase_config !== 'undefined') {
+                    config = JSON.parse(__firebase_config);
+                } else {
+                    config = MY_PERSONAL_FIREBASE_CONFIG;
                 }
                 
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'semesters'), { list: DEFAULT_SEMESTERS });
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'locations'), { list: DEFAULT_LOCATIONS });
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admin'), { username: "admin", password: "admin1234" });
+                if (!config || !config.apiKey) {
+                    throw new Error("No available Firebase config");
+                }
                 
-                updateSyncStatus("雲端建置成功", "success");
+                const app = initializeApp(config);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                let authResult = null;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    authResult = await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    authResult = await signInAnonymously(auth);
+                }
+                
+                currentUser = authResult.user;
+                isCloudConnected = true;
+                
+                statusDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse";
+                statusText.textContent = "已連線雲端";
+                
+                await startRealtimeSync();
+                
             } catch (err) {
-                console.error("Seeding Error:", err);
+                console.warn("Firestore connection failed, using offline fallback mode.", err);
+                isCloudConnected = false;
+                statusDot.className = "w-1.5 h-1.5 rounded-full bg-amber-400";
+                statusText.textContent = "單機展示模式";
+                
+                loadLocalDemoData();
             }
         }
 
-        // 更新狀態列 UI
-        function updateSyncStatus(text, type = "loading") {
-            const dot = document.getElementById('cloud-status-dot');
-            const textEl = document.getElementById('cloud-status-text');
-            const badge = document.getElementById('cloud-status-badge');
-            if(!dot || !textEl || !badge) return;
+        async function startRealtimeSync() {
+            const repairsCol = collection(db, 'artifacts', appId, 'public', 'data', 'repairs');
+            const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
+            const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admin', 'credentials');
             
-            textEl.textContent = text;
-            dot.className = "w-1.5 h-1.5 rounded-full";
-            badge.className = "flex items-center space-x-1 px-2.5 py-0.5 rounded-full border text-[10px]";
+            // 1. 同步參數設定
+            try {
+                const settingsSnap = await getDoc(settingsDocRef);
+                if (settingsSnap.exists()) {
+                    localState.semesters = settingsSnap.data().semesters || [];
+                    localState.locations = settingsSnap.data().locations || [];
+                } else {
+                    await setDoc(settingsDocRef, {
+                        semesters: localState.semesters,
+                        locations: localState.locations
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to sync settings:", e);
+            }
             
-            if (type === "success") {
-                dot.classList.add("bg-emerald-500");
-                badge.classList.add("bg-indigo-950/80", "border-indigo-700/60", "text-indigo-200");
-            } else if (type === "error") {
-                dot.classList.add("bg-red-500", "animate-pulse");
-                badge.classList.add("bg-red-950/80", "border-red-700/60", "text-red-200");
-            } else if (type === "offline") {
-                dot.classList.add("bg-blue-400");
-                badge.classList.add("bg-slate-850/80", "border-slate-700/60", "text-slate-300");
-            } else {
-                dot.classList.add("bg-amber-500", "animate-pulse");
-                badge.classList.add("bg-indigo-950/80", "border-indigo-700/60", "text-indigo-200");
+            // 2. 同步管理帳密
+            try {
+                const adminSnap = await getDoc(adminDocRef);
+                if (adminSnap.exists()) {
+                    localState.admin = adminSnap.data();
+                } else {
+                    await setDoc(adminDocRef, localState.admin);
+                }
+            } catch (e) {
+                console.error("Failed to sync admin credentials:", e);
+            }
+            
+            // 3. 同步並訂閱即時報修清單（全新狀態時不自動產出任何預設報修紀錄）
+            try {
+                const initialSnap = await getDocs(repairsCol);
+                if (initialSnap.empty) {
+                    localState.repairs = [];
+                }
+                
+                unsubRepairs = onSnapshot(repairsCol, (snapshot) => {
+                    const list = [];
+                    snapshot.forEach((doc) => {
+                        list.push({ id: doc.id, ...doc.data() });
+                    });
+                    localState.repairs = list;
+                    refreshAllViews();
+                }, (error) => {
+                    console.error("onSnapshot error:", error);
+                    window.showToast("資料同步異常，已啟用安全保護", "error");
+                });
+                
+            } catch (e) {
+                console.error("Sync repairs failed:", e);
             }
         }
 
-        // 動態刷新所有的學期與地點下拉選單
-        function updateFormDropdowns() {
-            const formSemSelect = document.getElementById('form-semester');
-            if(formSemSelect) {
-                formSemSelect.innerHTML = '';
-                semesters.forEach(sem => {
-                    const opt = document.createElement('option');
-                    opt.value = sem;
-                    opt.textContent = sem;
-                    formSemSelect.appendChild(opt);
-                });
-            }
+        // 重新設計，不載入任何模擬報修範例，維持全新無案件狀態
+        function loadLocalDemoData() {
+            localState.repairs = [];
+            refreshAllViews();
+        }
 
-            const formLocSelect = document.getElementById('form-location');
-            if(formLocSelect) {
-                formLocSelect.innerHTML = '';
-                locations.forEach(loc => {
-                    const opt = document.createElement('option');
-                    opt.value = loc;
-                    opt.textContent = loc;
-                    formLocSelect.appendChild(opt);
-                });
-            }
-
-            const filterSem = document.getElementById('filter-semester');
-            if(filterSem) {
-                const prevSemVal = filterSem.value;
-                filterSem.innerHTML = '<option value="">所有學期</option>';
-                semesters.forEach(sem => {
-                    const opt = document.createElement('option');
-                    opt.value = sem;
-                    opt.textContent = sem;
-                    filterSem.appendChild(opt);
-                });
-                filterSem.value = prevSemVal;
-            }
-
-            const filterLoc = document.getElementById('filter-location');
-            if(filterLoc) {
-                const prevLocVal = filterLoc.value;
-                filterLoc.innerHTML = '<option value="">所有地點</option>';
-                locations.forEach(loc => {
-                    const opt = document.createElement('option');
-                    opt.value = loc;
-                    opt.textContent = loc;
-                    filterLoc.appendChild(opt);
-                });
-                filterLoc.value = prevLocVal;
+        async function saveRepairToCloud(repair) {
+            if (!isCloudConnected || !db) return;
+            try {
+                const rDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'repairs', repair.id);
+                await setDoc(rDocRef, repair);
+            } catch (e) {
+                console.error("Cloud save repair failed:", e);
             }
         }
 
-        // 頁籤切換
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-section').forEach(sec => sec.classList.add('hidden'));
+        async function deleteRepairFromCloud(repairId) {
+            if (!isCloudConnected || !db) return;
+            try {
+                const rDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'repairs', repairId);
+                await deleteDoc(rDocRef);
+            } catch (e) {
+                console.error("Cloud delete repair failed:", e);
+            }
+        }
+
+        async function saveSettingsToCloud() {
+            if (!isCloudConnected || !db) return;
+            try {
+                const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
+                await setDoc(settingsDocRef, {
+                    semesters: localState.semesters,
+                    locations: localState.locations
+                });
+            } catch (e) {
+                console.error("Cloud save settings failed:", e);
+            }
+        }
+
+        async function saveAdminToCloud() {
+            if (!isCloudConnected || !db) return;
+            try {
+                const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admin', 'credentials');
+                await setDoc(adminDocRef, localState.admin);
+            } catch (e) {
+                console.error("Cloud save admin failed:", e);
+            }
+        }
+
+        function getCategoryIcon(category) {
+            switch (category) {
+                case "水電類":
+                    return `<div class="bg-blue-50 text-blue-600 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-blue-100"><i data-lucide="droplets" class="w-5 h-5"></i></div>`;
+                case "泥作木工類":
+                    return `<div class="bg-amber-50 text-amber-700 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-amber-100"><i data-lucide="hammer" class="w-5 h-5"></i></div>`;
+                case "資訊設備類":
+                    return `<div class="bg-purple-50 text-purple-600 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-purple-100"><i data-lucide="monitor" class="w-5 h-5"></i></div>`;
+                case "空調冷氣":
+                    return `<div class="bg-cyan-50 text-cyan-600 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-cyan-100"><i data-lucide="wind" class="w-5 h-5"></i></div>`;
+                default:
+                    return `<div class="bg-slate-50 text-slate-600 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-slate-200"><i data-lucide="help-circle" class="w-5 h-5"></i></div>`;
+            }
+        }
+
+        function getStatusBadge(status) {
+            switch (status) {
+                case "待處理":
+                    return `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200"><span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5"></span>待處理</span>`;
+                case "處理中":
+                    return `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>處理中</span>`;
+                case "已完成":
+                    return `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>已完成</span>`;
+                default:
+                    return `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-50 text-slate-700 border border-slate-200">${status}</span>`;
+            }
+        }
+
+        function renderFormDropdowns() {
+            const formSemester = document.getElementById('form-semester');
+            const formLocation = document.getElementById('form-location');
+            const filterSemester = document.getElementById('filter-semester');
+            const filterLocation = document.getElementById('filter-location');
+            
+            const selFormSemester = formSemester.value;
+            const selFormLocation = formLocation.value;
+            const selFilterSemester = filterSemester.value;
+            const selFilterLocation = filterLocation.value;
+            
+            formSemester.innerHTML = localState.semesters.map(s => `<option value="${s}">${s}</option>`).join('');
+            formLocation.innerHTML = localState.locations.map(l => `<option value="${l}">${l}</option>`).join('');
+            
+            filterSemester.innerHTML = `<option value="">所有學期</option>` + localState.semesters.map(s => `<option value="${s}">${s}</option>`).join('');
+            filterLocation.innerHTML = `<option value="">所有地點</option>` + localState.locations.map(l => `<option value="${l}">${l}</option>`).join('');
+            
+            if (selFormSemester && localState.semesters.includes(selFormSemester)) formSemester.value = selFormSemester;
+            if (selFormLocation && localState.locations.includes(selFormLocation)) formLocation.value = selFormLocation;
+            if (selFilterSemester && localState.semesters.includes(selFilterSemester)) filterSemester.value = selFilterSemester;
+            if (selFilterLocation && localState.locations.includes(selFilterLocation)) filterLocation.value = selFilterLocation;
+        }
+
+        function renderCards(repairsToRender) {
+            const container = document.getElementById('repair-list-container');
+            if (repairsToRender.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full py-16 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                        <div class="bg-slate-50 inline-flex p-4 rounded-full text-slate-400 mb-3">
+                            <i data-lucide="clipboard-x" class="w-8 h-8"></i>
+                        </div>
+                        <h3 class="font-bold text-slate-700 text-lg">目前尚無任何報修紀錄</h3>
+                        <p class="text-slate-400 text-sm mt-1">請填寫左上角「師生報修」單，提交新的報修申請。</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+            
+            container.innerHTML = repairsToRender.map(r => {
+                const timeStr = new Date(r.createdAt).toLocaleString('zh-TW', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                });
+                
+                const costSection = r.status === "已完成" 
+                    ? `<div class="mt-3 flex items-center justify-between text-xs border-t border-slate-100 pt-2 bg-emerald-50/20 px-3 py-1.5 rounded-lg border border-emerald-100/30">
+                         <span class="text-emerald-800 font-medium flex items-center"><i data-lucide="dollar-sign" class="w-3.5 h-3.5 mr-0.5"></i>修復經費:</span>
+                         <span class="font-bold text-emerald-600">NT$ ${r.cost.toLocaleString()}</span>
+                       </div>`
+                    : '';
+                    
+                const noteSection = r.note 
+                    ? `<div class="mt-3 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                         <span class="text-[11px] font-semibold text-slate-400 block mb-1">總務處處理備註：</span>
+                         <p class="text-xs text-slate-600 leading-relaxed">${r.note}</p>
+                       </div>`
+                    : '';
+                    
+                return `
+                    <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-start justify-between gap-3 mb-4">
+                                <div class="flex items-center space-x-3">
+                                    ${getCategoryIcon(r.category)}
+                                    <div>
+                                        <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">${r.category}</span>
+                                        <span class="block text-slate-400 text-[10px] mt-0.5">${timeStr}</span>
+                                    </div>
+                                </div>
+                                ${getStatusBadge(r.status)}
+                            </div>
+                            
+                            <div class="space-y-2 text-sm text-slate-600">
+                                <div class="flex items-start">
+                                    <i data-lucide="map-pin" class="w-4 h-4 mr-2 text-slate-400 mt-0.5 flex-shrink-0"></i>
+                                    <div>
+                                        <span class="font-medium text-slate-800">${r.location}</span>
+                                        <span class="text-xs text-slate-400 block">${r.detailLocation}</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-start">
+                                    <i data-lucide="user" class="w-4 h-4 mr-2 text-slate-400 mt-0.5 flex-shrink-0"></i>
+                                    <span class="text-slate-700">${r.reporter} <span class="text-xs text-slate-400">(${r.contact})</span></span>
+                                </div>
+                                <div class="flex items-start">
+                                    <i data-lucide="calendar" class="w-4 h-4 mr-2 text-slate-400 mt-0.5 flex-shrink-0"></i>
+                                    <span class="text-slate-500 text-xs">${r.semester}</span>
+                                </div>
+                                
+                                <div class="mt-4 border-t border-slate-100 pt-3">
+                                    <span class="text-xs font-bold text-slate-400 block mb-1">故障描述：</span>
+                                    <p class="text-slate-600 text-xs leading-relaxed whitespace-pre-wrap">${r.description}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            ${noteSection}
+                            ${costSection}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            lucide.createIcons();
+        }
+
+        window.switchTab = function(tabId) {
+            document.querySelectorAll('.tab-section').forEach(el => el.classList.add('hidden'));
             document.getElementById(`section-${tabId}`).classList.remove('hidden');
-
+            
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('bg-indigo-800', 'text-white', 'shadow-inner');
                 btn.classList.add('text-indigo-100', 'hover:bg-indigo-800');
             });
             
             const activeBtn = document.getElementById(`tab-${tabId}`);
-            activeBtn.classList.remove('text-indigo-100', 'hover:bg-indigo-800');
             activeBtn.classList.add('bg-indigo-800', 'text-white', 'shadow-inner');
+            activeBtn.classList.remove('text-indigo-100', 'hover:bg-indigo-800');
+        };
 
-            if (tabId === 'admin' && sessionStorage.getItem('admin_logged_in') === 'true') {
-                renderAdminDashboard();
-            }
-        }
-
-        // 送出報修單 (師生端)
-        async function handleFormSubmit(event) {
-            event.preventDefault();
-
+        window.handleFormSubmit = async function(e) {
+            e.preventDefault();
+            
             const reporter = document.getElementById('reporter').value.trim();
             const contact = document.getElementById('contact').value.trim();
             const semester = document.getElementById('form-semester').value;
@@ -802,15 +869,9 @@
             const location = document.getElementById('form-location').value;
             const detailLocation = document.getElementById('detail-location').value.trim();
             const description = document.getElementById('description').value.trim();
-
-            const now = new Date();
-            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-            // 智慧產生案件編碼
-            const uniqueId = 'REP' + Date.now().toString().slice(-6);
-
+            
             const newRepair = {
-                id: uniqueId,
+                id: "rep-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
                 reporter,
                 contact,
                 semester,
@@ -818,706 +879,397 @@
                 location,
                 detailLocation,
                 description,
-                urgency: "普通",
                 status: "待處理",
                 cost: 0,
-                date: dateStr,
-                note: ""
+                note: "",
+                createdAt: Date.now()
             };
-
-            if (isCloudMode) {
-                // 雲端儲存模式
-                updateSyncStatus("上傳雲端...", "loading");
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'repairs', uniqueId), newRepair);
-                    document.getElementById('repair-form').reset();
-                    showToast("雲端報修單送出成功！單號：" + uniqueId, "check-circle");
-                } catch (err) {
-                    console.error("Failed to post to cloud:", err);
-                    showToast("雲端連線失敗，請稍後再試", "alert-triangle");
-                    updateSyncStatus("連線錯誤", "error");
-                    return;
-                }
-            } else {
-                // 本地儲存模式
-                repairs.unshift(newRepair);
-                localStorage.setItem('repair_records', JSON.stringify(repairs));
-                document.getElementById('repair-form').reset();
-                showToast("報修單送出成功！單號：" + uniqueId, "check-circle");
-                filterRepairs();
+            
+            localState.repairs.push(newRepair);
+            refreshAllViews();
+            
+            if (isCloudConnected) {
+                await saveRepairToCloud(newRepair);
             }
+            
+            document.getElementById('repair-form').reset();
+            window.showToast("報修單提交成功！請至進度查詢查看狀況。", "success");
+            window.switchTab('search');
+        };
 
-            // 跳轉至進度查詢頁
-            setTimeout(() => {
-                switchTab('search');
-            }, 800);
-        }
-
-        // 前台進度查詢與過濾
-        function filterRepairs() {
-            const searchInput = document.getElementById('search-input');
-            const searchKeyword = searchInput ? searchInput.value.toLowerCase() : "";
-            const selectedSemester = document.getElementById('filter-semester').value;
-            const selectedLocation = document.getElementById('filter-location').value;
-            const selectedStatus = document.getElementById('filter-status').value;
-
-            const filtered = repairs.filter(item => {
-                const matchesKeyword = item.reporter.toLowerCase().includes(searchKeyword) ||
-                                       item.description.toLowerCase().includes(searchKeyword) ||
-                                       item.detailLocation.toLowerCase().includes(searchKeyword) ||
-                                       item.id.toLowerCase().includes(searchKeyword);
+        window.filterRepairs = function() {
+            const query = document.getElementById('search-input').value.toLowerCase().trim();
+            const filterSemester = document.getElementById('filter-semester').value;
+            const filterLocation = document.getElementById('filter-location').value;
+            const filterStatus = document.getElementById('filter-status').value;
+            
+            const filtered = localState.repairs.filter(r => {
+                const matchesKeyword = !query || 
+                    r.reporter.toLowerCase().includes(query) ||
+                    r.location.toLowerCase().includes(query) ||
+                    r.detailLocation.toLowerCase().includes(query) ||
+                    r.description.toLowerCase().includes(query) ||
+                    (r.note && r.note.toLowerCase().includes(query));
+                    
+                const matchesSemester = !filterSemester || r.semester === filterSemester;
+                const matchesLocation = !filterLocation || r.location === filterLocation;
+                const matchesStatus = !filterStatus || r.status === filterStatus;
                 
-                const matchesSemester = selectedSemester === "" || item.semester === selectedSemester;
-                const matchesLocation = selectedLocation === "" || item.location === selectedLocation;
-                const matchesStatus = selectedStatus === "" || item.status === selectedStatus;
-
                 return matchesKeyword && matchesSemester && matchesLocation && matchesStatus;
             });
+            
+            filtered.sort((a, b) => b.createdAt - a.createdAt);
+            renderCards(filtered);
+        };
 
-            renderRepairCards(filtered);
-        }
+        let isLoggedIntoAdmin = false;
 
-        // 渲染前台進度卡片
-        function renderRepairCards(list) {
-            const container = document.getElementById('repair-list-container');
-            if(!container) return;
-            container.innerHTML = '';
+        window.handleAdminLogin = function(e) {
+            e.preventDefault();
+            const userVal = document.getElementById('login-username').value;
+            const passVal = document.getElementById('login-password').value;
+            
+            if (userVal === localState.admin.username && passVal === localState.admin.password) {
+                isLoggedIntoAdmin = true;
+                document.getElementById('admin-login-card').classList.add('hidden');
+                document.getElementById('admin-dashboard-content').classList.remove('hidden');
+                window.showToast("成功登入總務處管理後台", "success");
+                refreshAdminViews();
+            } else {
+                window.showToast("帳號或密碼錯誤，請重新確認", "error");
+            }
+        };
 
-            if (list.length === 0) {
-                container.innerHTML = `
-                    <div class="col-span-full py-12 text-center bg-white rounded-2xl shadow-sm border border-slate-100">
-                        <i data-lucide="clipboard" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
-                        <p class="text-slate-400">目前沒有找到符合條件的報修項目。</p>
-                    </div>
-                `;
-                lucide.createIcons();
+        window.handleAdminLogout = function() {
+            isLoggedIntoAdmin = false;
+            document.getElementById('admin-login-card').classList.remove('hidden');
+            document.getElementById('admin-dashboard-content').classList.add('hidden');
+            document.getElementById('login-password').value = '';
+            window.showToast("已安全登出後台系統", "info");
+        };
+
+        window.openChangePasswordModal = function() {
+            document.getElementById('new-admin-username').value = localState.admin.username;
+            document.getElementById('new-admin-password').value = '';
+            document.getElementById('password-modal').classList.remove('hidden');
+        };
+
+        window.closeChangePasswordModal = function() {
+            document.getElementById('password-modal').classList.add('hidden');
+        };
+
+        window.handlePasswordChange = async function(e) {
+            e.preventDefault();
+            const newUsername = document.getElementById('new-admin-username').value.trim();
+            const newPassword = document.getElementById('new-admin-password').value.trim();
+            
+            if (!newUsername || !newPassword) {
+                window.showToast("帳號與密碼皆不能為空", "error");
                 return;
             }
-
-            list.forEach(item => {
-                let statusClass = "bg-red-50 text-red-700 border-red-100";
-                let statusDot = "bg-red-500";
-                if (item.status === '處理中') {
-                    statusClass = "bg-amber-50 text-amber-700 border-amber-100";
-                    statusDot = "bg-amber-500";
-                } else if (item.status === '已完成') {
-                    statusClass = "bg-emerald-50 text-emerald-700 border-emerald-100";
-                    statusDot = "bg-emerald-500";
-                }
-
-                let categoryIcon = "wrench";
-                if (item.category === '空調冷氣') categoryIcon = "snowflake";
-                if (item.category === '水電類') categoryIcon = "droplet";
-                if (item.category === '泥作木工類') categoryIcon = "hammer";
-                if (item.category === '資訊設備類') categoryIcon = "monitor";
-
-                const cardHtml = `
-                    <div class="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md transition-all duration-200 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">${item.id}</span>
-                            <span class="text-xs text-slate-400">${item.date}</span>
-                        </div>
-                        
-                        <div>
-                            <div class="flex items-center space-x-1.5 text-slate-800 font-bold text-base mb-1">
-                                <i data-lucide="${categoryIcon}" class="w-4 h-4 text-indigo-500"></i>
-                                <span>${item.category}</span>
-                            </div>
-                            <p class="text-slate-600 text-sm line-clamp-2 h-10 overflow-hidden text-ellipsis">${item.description}</p>
-                        </div>
-
-                        <div class="border-t border-slate-100 pt-3 space-y-2 text-xs text-slate-500">
-                            <div class="flex justify-between">
-                                <span class="font-medium">學期參數</span>
-                                <span class="text-slate-700">${item.semester}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="font-medium">報修大樓</span>
-                                <span class="text-slate-700 font-semibold">${item.location} (${item.detailLocation})</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="font-medium">報修人</span>
-                                <span class="text-slate-700">${item.reporter}</span>
-                            </div>
-                        </div>
-
-                        <div class="border-t border-slate-100 pt-3 flex items-center justify-between">
-                            <div class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${statusClass}">
-                                <span class="w-2.5 h-2.5 rounded-full ${statusDot} animate-pulse"></span>
-                                <span>${item.status}</span>
-                            </div>
-                            ${item.status === '已完成' ? `
-                                <div class="text-right">
-                                    <span class="text-xs text-slate-400 block">修復經費</span>
-                                    <span class="text-sm font-bold text-orange-600">NT$ ${item.cost.toLocaleString()}</span>
-                                </div>
-                            ` : `
-                                <span class="text-xs text-slate-450 italic font-medium text-amber-600">${isCloudMode ? '雲端即時同步中' : '唯讀本地端'}</span>
-                            `}
-                        </div>
-
-                        ${item.note ? `
-                            <div class="bg-indigo-50/50 border border-indigo-100 rounded-lg p-2.5 mt-2">
-                                <span class="text-[10px] font-bold text-indigo-600 block uppercase flex items-center space-x-1">
-                                    <i data-lucide="bell" class="w-3 h-3"></i><span>總務處備註：</span>
-                                </span>
-                                <p class="text-slate-600 text-xs mt-0.5">${item.note}</p>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-
-                container.insertAdjacentHTML('beforeend', cardHtml);
-            });
-
-            lucide.createIcons();
-        }
-
-        // 管理員登入認證
-        function handleAdminLogin(event) {
-            event.preventDefault();
-            const userIn = document.getElementById('login-username').value.trim();
-            const passIn = document.getElementById('login-password').value.trim();
-
-            if (userIn === adminSettings.username && passIn === adminSettings.password) {
-                sessionStorage.setItem('admin_logged_in', 'true');
-                showAdminDashboard();
-                showToast("解鎖登入成功！歡迎使用管理後台。", "unlock");
-            } else {
-                showToast("管理者帳號或密碼輸入錯誤，請再試一次。", "alert-triangle");
+            
+            localState.admin.username = newUsername;
+            localState.admin.password = newPassword;
+            
+            if (isCloudConnected) {
+                await saveAdminToCloud();
             }
-        }
+            
+            window.closeChangePasswordModal();
+            window.showToast("管理帳密已修改成功！", "success");
+        };
 
-        // 手動安全登出
-        function handleAdminLogout() {
-            sessionStorage.removeItem('admin_logged_in');
-            showAdminLoginCard();
-            showToast("已成功登出管理系統並收回操作權限。", "lock");
-        }
-
-        // 切換顯示：登入介面
-        function showAdminLoginCard() {
-            document.getElementById('admin-login-card').style.display = 'block';
-            document.getElementById('admin-dashboard-content').style.display = 'hidden';
-            document.getElementById('admin-dashboard-content').classList.add('hidden');
-        }
-
-        // 切換顯示：登入後的主控台
-        function showAdminDashboard() {
-            document.getElementById('admin-login-card').style.display = 'none';
-            document.getElementById('admin-dashboard-content').classList.remove('hidden');
-            renderAdminDashboard();
-        }
-
-        // 渲染整個後台數據
-        function renderAdminDashboard() {
-            let total = repairs.length;
-            let pending = repairs.filter(r => r.status === '待處理').length;
-            let completed = repairs.filter(r => r.status === '已完成').length;
-            let totalCost = repairs.reduce((sum, item) => sum + Number(item.cost || 0), 0);
-
+        function updateStats() {
+            const list = localState.repairs;
+            const total = list.length;
+            const pending = list.filter(r => r.status === "待處理").length;
+            const completed = list.filter(r => r.status === "已完成").length;
+            const totalCost = list.reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
+            
             document.getElementById('stat-total').textContent = `${total} 件`;
             document.getElementById('stat-pending').textContent = `${pending} 件`;
             document.getElementById('stat-completed').textContent = `${completed} 件`;
             document.getElementById('stat-cost').textContent = `NT$ ${totalCost.toLocaleString()}`;
-
-            renderParametersLists();
-            renderAdminRepairs();
         }
 
-        // 渲染參數管理列表 (右側欄)
-        function renderParametersLists() {
-            const semContainer = document.getElementById('semesters-list-container');
-            if(semContainer) {
-                semContainer.innerHTML = '';
-                semesters.forEach((sem, idx) => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = "flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-sm shadow-sm";
-                    itemDiv.innerHTML = `
-                        <span class="text-slate-700 font-medium">${sem}</span>
-                        <button onclick="deleteSemester(${idx})" class="text-slate-400 hover:text-red-500 transition" title="刪除學期">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    `;
-                    semContainer.appendChild(itemDiv);
-                });
-            }
-
-            const locContainer = document.getElementById('locations-list-container');
-            if(locContainer) {
-                locContainer.innerHTML = '';
-                locations.forEach((loc, idx) => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = "flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-sm shadow-sm";
-                    itemDiv.innerHTML = `
-                        <span class="text-slate-700 font-medium">${loc}</span>
-                        <button onclick="deleteLocation(${idx})" class="text-slate-400 hover:text-red-500 transition" title="刪除地點">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
-                    `;
-                    locContainer.appendChild(itemDiv);
-                });
-            }
-
-            lucide.createIcons();
-        }
-
-        // 新增學期功能
-        async function addSemester() {
-            const input = document.getElementById('new-semester-input');
-            const newSem = input.value.trim();
-            if (!newSem) {
-                showToast("請輸入欲新增的學期名稱！", "alert-circle");
-                return;
-            }
-            if (semesters.includes(newSem)) {
-                showToast("該學期名稱已存在！", "alert-triangle");
-                return;
-            }
-
-            const updatedList = [...semesters, newSem];
-
-            if (isCloudMode) {
-                updateSyncStatus("更新雲端學期...", "loading");
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'semesters'), { list: updatedList });
-                    input.value = '';
-                    showToast(`已成功新增學期設定！`, "check-circle");
-                } catch(err) {
-                    showToast("雲端寫入失敗", "alert-triangle");
-                }
-            } else {
-                semesters = updatedList;
-                localStorage.setItem('sys_semesters', JSON.stringify(semesters));
-                input.value = '';
-                updateFormDropdowns();
-                renderParametersLists();
-                showToast(`已成功新增學期：${newSem}`, "check-circle");
-            }
-        }
-
-        // 刪除學期功能
-        async function deleteSemester(index) {
-            const targetSem = semesters[index];
-            const isUsed = repairs.some(r => r.semester === targetSem);
-            if (isUsed) {
-                showToast(`無法刪除！已有報修案件歸屬於「${targetSem}」。`, "alert-triangle");
-                return;
-            }
-
-            const updatedList = [...semesters];
-            updatedList.splice(index, 1);
-
-            if (isCloudMode) {
-                updateSyncStatus("刪除雲端學期...", "loading");
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'semesters'), { list: updatedList });
-                    showToast("已成功移除該學期設定。", "trash");
-                } catch(err) {
-                    showToast("雲端刪除失敗", "alert-triangle");
-                }
-            } else {
-                semesters = updatedList;
-                localStorage.setItem('sys_semesters', JSON.stringify(semesters));
-                updateFormDropdowns();
-                renderParametersLists();
-                showToast("已成功移除該學期設定。", "trash");
-            }
-        }
-
-        // 新增報修地點功能
-        async function addLocation() {
-            const input = document.getElementById('new-location-input');
-            const newLoc = input.value.trim();
-            if (!newLoc) {
-                showToast("請輸入欲新增的地點名稱！", "alert-circle");
-                return;
-            }
-            if (locations.includes(newLoc)) {
-                showToast("該地點/大樓名稱已存在！", "alert-triangle");
-                return;
-            }
-
-            const updatedList = [...locations, newLoc];
-
-            if (isCloudMode) {
-                updateSyncStatus("更新雲端地點...", "loading");
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'locations'), { list: updatedList });
-                    input.value = '';
-                    showToast(`已成功新增地點！`, "check-circle");
-                } catch(err) {
-                    showToast("雲端寫入失敗", "alert-triangle");
-                }
-            } else {
-                locations = updatedList;
-                localStorage.setItem('sys_locations', JSON.stringify(locations));
-                input.value = '';
-                updateFormDropdowns();
-                renderParametersLists();
-                showToast(`已成功新增地點：${newLoc}`, "check-circle");
-            }
-        }
-
-        // 刪除報修地點功能
-        async function deleteLocation(index) {
-            const targetLoc = locations[index];
-            const isUsed = repairs.some(r => r.location === targetLoc);
-            if (isUsed) {
-                showToast(`無法刪除！已有報修案件發生在「${targetLoc}」。`, "alert-triangle");
-                return;
-            }
-
-            const updatedList = [...locations];
-            updatedList.splice(index, 1);
-
-            if (isCloudMode) {
-                updateSyncStatus("刪除雲端地點...", "loading");
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'locations'), { list: updatedList });
-                    showToast("已成功移除該地點大樓設定。", "trash");
-                } catch(err) {
-                    showToast("雲端刪除失敗", "alert-triangle");
-                }
-            } else {
-                locations = updatedList;
-                localStorage.setItem('sys_locations', JSON.stringify(locations));
-                updateFormDropdowns();
-                renderParametersLists();
-                showToast("已成功移除該地點大樓設定。", "trash");
-            }
-        }
-
-        // 渲染管理後台的維修管理表格
-        function renderAdminRepairs() {
-            const filterSelect = document.getElementById('admin-filter-status');
-            const filterVal = filterSelect ? filterSelect.value : "";
-            const tbody = document.getElementById('admin-repairs-table');
-            if(!tbody) return;
-            tbody.innerHTML = '';
-
-            const filtered = repairs.filter(r => filterVal === "" || r.status === filterVal);
-
+        window.renderAdminRepairs = function() {
+            const tableBody = document.getElementById('admin-repairs-table');
+            const filterStatus = document.getElementById('admin-filter-status').value;
+            
+            const filtered = localState.repairs.filter(r => {
+                return !filterStatus || r.status === filterStatus;
+            });
+            
+            filtered.sort((a, b) => b.createdAt - a.createdAt);
+            
             if (filtered.length === 0) {
-                tbody.innerHTML = `
+                tableBody.innerHTML = `
                     <tr>
                         <td colspan="5" class="px-6 py-12 text-center text-slate-400">
-                            沒有對應狀態的報修表單資料。
+                            <i data-lucide="clipboard" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+                            目前無符合此狀態的報修案件
                         </td>
                     </tr>
                 `;
+                lucide.createIcons();
                 return;
             }
-
-            filtered.forEach(item => {
-                let statusBadge = '';
-                if (item.status === '待處理') {
-                    statusBadge = `<span class="bg-red-100 text-red-800 text-xs px-2.5 py-1 rounded-full font-medium inline-flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5"></span>待處理</span>`;
-                } else if (item.status === '處理中') {
-                    statusBadge = `<span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-medium inline-flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>處理中</span>`;
-                } else if (item.status === '已完成') {
-                    statusBadge = `<span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-medium inline-flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>已完成</span>`;
-                }
-
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition duration-150";
-                tr.innerHTML = `
-                    <td class="px-6 py-4">
-                        <div class="font-bold text-slate-800 flex items-center">
-                            <span class="bg-slate-100 text-slate-700 font-mono text-xs px-1.5 py-0.5 rounded mr-1.5">${item.id}</span>
-                            <span>${item.category}</span>
-                        </div>
-                        <div class="text-xs text-slate-400 mt-1">報修時間：${item.date}</div>
-                        <p class="text-xs text-slate-500 mt-1.5 font-normal max-w-sm overflow-hidden text-ellipsis whitespace-nowrap" title="${item.description}">
-                            詳情：${item.description}
-                        </p>
-                    </td>
-                    <td class="px-6 py-4">
-                        <div class="font-semibold text-slate-700">${item.location} <span class="font-normal text-xs text-slate-500">(${item.detailLocation})</span></div>
-                        <div class="text-[11px] text-slate-400 mt-0.5">${item.semester}</div>
-                        <div class="text-xs text-slate-500 mt-1">申報人：${item.reporter} (${item.contact})</div>
-                    </td>
-                    <td class="px-6 py-4">
-                        ${statusBadge}
-                    </td>
-                    <td class="px-6 py-4 font-bold text-slate-700 text-right pr-12">
-                        ${item.status === '已完成' ? `NT$ ${Number(item.cost).toLocaleString()}` : '<span class="text-xs text-slate-400 italic font-normal">待登錄</span>'}
-                    </td>
-                    <td class="px-6 py-4 text-center">
-                        <div class="flex items-center justify-center space-x-2">
-                            <button onclick="openStatusModal('${item.id}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-2.5 py-1.5 rounded-lg text-xs transition duration-150 inline-flex items-center space-x-1">
-                                <i data-lucide="edit" class="w-3.5 h-3.5"></i>
-                                <span>設定</span>
-                            </button>
-                            <button onclick="confirmDeleteRepair('${item.id}')" class="bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-2.5 py-1.5 rounded-lg text-xs transition duration-150 inline-flex items-center space-x-1" title="刪除此報修單">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                <span>刪除</span>
-                            </button>
-                        </div>
-                    </td>
+            
+            tableBody.innerHTML = filtered.map(r => {
+                const costStr = r.status === "已完成" ? `NT$ ${r.cost.toLocaleString()}` : '—';
+                return `
+                    <tr class="hover:bg-slate-50 transition-colors duration-150">
+                        <td class="px-6 py-4">
+                            <div class="font-semibold text-slate-800">${r.reporter}</div>
+                            <div class="text-xs text-indigo-600 font-semibold mt-0.5">${r.category}</div>
+                            <p class="text-xs text-slate-500 mt-1.5 max-w-xs truncate" title="${r.description}">${r.description}</p>
+                            <span class="text-[10px] text-slate-400 block mt-1">報修時間: ${new Date(r.createdAt).toLocaleString('zh-TW')}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-slate-700 font-medium">${r.location}</div>
+                            <div class="text-xs text-slate-400">${r.detailLocation}</div>
+                            <span class="inline-block mt-2 text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${r.semester}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            ${getStatusBadge(r.status)}
+                            ${r.note ? `<p class="text-xs text-slate-500 mt-1 max-w-xs truncate" title="備註: ${r.note}"><b>備註:</b> ${r.note}</p>` : ''}
+                        </td>
+                        <td class="px-6 py-4 font-semibold text-slate-700">
+                            ${costStr}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <div class="flex items-center justify-center space-x-2">
+                                <button onclick="openStatusModal('${r.id}')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1">
+                                    <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                    <span>處置</span>
+                                </button>
+                                <button onclick="confirmDeleteRepair('${r.id}')" class="bg-red-50 text-red-600 hover:bg-red-100 p-1.5 rounded-lg text-xs font-semibold transition" title="刪除案件">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
                 `;
-                tbody.appendChild(tr);
-            });
-
+            }).join('');
+            
             lucide.createIcons();
-        }
+        };
 
-        // 開啟變更狀態與金額 Modal
-        function openStatusModal(id) {
-            const item = repairs.find(r => r.id === id);
-            if (!item) return;
-
+        window.openStatusModal = function(id) {
+            const repair = localState.repairs.find(r => r.id === id);
+            if (!repair) return;
+            
             document.getElementById('modal-repair-id').value = id;
-            document.getElementById('modal-status').value = item.status;
-            document.getElementById('modal-cost').value = item.cost || 0;
-            document.getElementById('modal-note').value = item.note || "";
+            document.getElementById('modal-status').value = repair.status;
+            document.getElementById('modal-cost').value = repair.cost || 0;
+            document.getElementById('modal-note').value = repair.note || '';
+            
+            document.getElementById('status-modal').classList.remove('hidden');
+        };
 
-            const modal = document.getElementById('status-modal');
-            modal.classList.remove('hidden');
-        }
-
-        // 關閉變更狀態與金額 Modal
-        function closeStatusModal() {
+        window.closeStatusModal = function() {
             document.getElementById('status-modal').classList.add('hidden');
-        }
+        };
 
-        // 儲存狀態及修繕金額設定
-        async function saveStatusChanges() {
+        window.saveStatusChanges = async function() {
             const id = document.getElementById('modal-repair-id').value;
             const status = document.getElementById('modal-status').value;
             const cost = Number(document.getElementById('modal-cost').value) || 0;
             const note = document.getElementById('modal-note').value.trim();
-
-            if (isCloudMode) {
-                updateSyncStatus("儲存中...", "loading");
-                try {
-                    const repairDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'repairs', id);
-                    await updateDoc(repairDocRef, {
-                        status: status,
-                        cost: status === '已完成' ? cost : 0,
-                        note: note
-                    });
-                    
-                    closeStatusModal();
-                    showToast(`已成功同步單號 ${id} 的進度與經費！`, "check");
-                } catch (err) {
-                    console.error("更新故障:", err);
-                    showToast("連線故障，無法更新資料", "alert-triangle");
-                }
-            } else {
-                const idx = repairs.findIndex(r => r.id === id);
-                if (idx !== -1) {
-                    repairs[idx].status = status;
-                    repairs[idx].cost = status === '已完成' ? cost : 0;
-                    repairs[idx].note = note;
-
-                    localStorage.setItem('repair_records', JSON.stringify(repairs));
-                    closeStatusModal();
-                    renderAdminDashboard();
-                    filterRepairs();
-                    showToast(`已成功儲存單號 ${id} 的進度與經費資料！`, "check");
-                }
-            }
-        }
-
-        // 開啟密碼設定彈窗
-        function openChangePasswordModal() {
-            document.getElementById('new-admin-username').value = adminSettings.username;
-            document.getElementById('new-admin-password').value = "";
-            document.getElementById('password-modal').classList.remove('hidden');
-        }
-
-        // 關閉密碼設定彈窗
-        function closeChangePasswordModal() {
-            document.getElementById('password-modal').classList.add('hidden');
-        }
-
-        // 提交修改管理者帳密
-        async function handlePasswordChange(event) {
-            event.preventDefault();
-            const newUsername = document.getElementById('new-admin-username').value.trim();
-            const newPassword = document.getElementById('new-admin-password').value.trim();
-
-            if (!newUsername || !newPassword) {
-                showToast("帳號與新密碼欄位不可為空值！", "alert-triangle");
-                return;
-            }
-
-            if (isCloudMode) {
-                updateSyncStatus("修改認證...", "loading");
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'admin'), {
-                        username: newUsername,
-                        password: newPassword
-                    });
-                    closeChangePasswordModal();
-                    showToast("管理者帳密已變更，且全平台雲端同步成功！", "shield-check");
-                } catch (err) {
-                    showToast("雲端帳密儲存失敗", "alert-triangle");
-                }
-            } else {
-                adminSettings.username = newUsername;
-                adminSettings.password = newPassword;
-                localStorage.setItem('repair_admin', JSON.stringify(adminSettings));
-                closeChangePasswordModal();
-                showToast("管理者帳號與密碼修改成功！請牢記您的設定。", "shield-check");
-            }
-        }
-
-        // 開啟自訂確認彈窗
-        function showConfirmModal(title, message, onConfirm, isDanger = true) {
-            document.getElementById('confirm-modal-title').textContent = title;
-            document.getElementById('confirm-modal-message').textContent = message;
             
-            const iconContainer = document.getElementById('confirm-modal-icon-container');
-            const actionBtn = document.getElementById('confirm-modal-action-btn');
-            const icon = document.getElementById('confirm-modal-icon');
-
-            if (isDanger) {
-                iconContainer.className = "bg-red-100 text-red-600 inline-flex p-4 rounded-full mb-4";
-                actionBtn.className = "bg-red-600 hover:bg-red-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition shadow-md";
-                icon.setAttribute('data-lucide', 'alert-triangle');
-            } else {
-                iconContainer.className = "bg-indigo-100 text-indigo-600 inline-flex p-4 rounded-full mb-4";
-                actionBtn.className = "bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition shadow-md";
-                icon.setAttribute('data-lucide', 'info');
-            }
-
-            confirmActionCallback = onConfirm;
-            document.getElementById('confirm-modal').classList.remove('hidden');
-            lucide.createIcons();
-        }
-
-        // 關閉自訂確認彈窗
-        function closeConfirmModal() {
-            document.getElementById('confirm-modal').classList.add('hidden');
-            confirmActionCallback = null;
-        }
-
-        // 執行確認的回調函數
-        function executeConfirmAction() {
-            if (confirmActionCallback) {
-                confirmActionCallback();
-            }
-            closeConfirmModal();
-        }
-
-        // 觸發報修案件刪除確認
-        function confirmDeleteRepair(id) {
-            showConfirmModal(
-                "確定要刪除此報修單？",
-                `您即將永久刪除報修單：${id}。此操作包含所有的處理歷史與經費紀錄將全數移除，且所有連線裝置將同步被刪除！`,
-                () => {
-                    deleteRepair(id);
-                },
-                true
-            );
-        }
-
-        // 真正執行刪除邏輯
-        async function deleteRepair(id) {
-            if (isCloudMode) {
-                updateSyncStatus("刪除中...", "loading");
-                try {
-                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'repairs', id));
-                    showToast(`已成功移除雲端報修單：${id}`, "trash-2");
-                } catch (err) {
-                    showToast("雲端刪除失敗", "alert-triangle");
+            const idx = localState.repairs.findIndex(r => r.id === id);
+            if (idx !== -1) {
+                localState.repairs[idx].status = status;
+                localState.repairs[idx].cost = cost;
+                localState.repairs[idx].note = note;
+                
+                if (isCloudConnected) {
+                    await saveRepairToCloud(localState.repairs[idx]);
                 }
-            } else {
-                const index = repairs.findIndex(r => r.id === id);
-                if (index !== -1) {
-                    repairs.splice(index, 1);
-                    localStorage.setItem('repair_records', JSON.stringify(repairs));
-                    renderAdminDashboard();
-                    filterRepairs();
-                    showToast(`已成功刪除報修單：${id}`, "trash-2");
-                }
+                
+                window.closeStatusModal();
+                window.showToast("報修案件處置設定成功！", "success");
+                refreshAllViews();
             }
-        }
+        };
 
-        // 重置為預設展示數據
-        async function resetDemoData() {
-            showConfirmModal(
-                "確定要重置系統資料嗎？",
-                "此動作會一併清除現有所有的客製大樓、自訂學期，並恢復最初的三筆展示單據。本操作無法還原，確定執行？",
+        window.confirmDeleteRepair = function(id) {
+            window.openConfirmModal(
+                "確定刪除此案件？",
+                "您即將永久刪除此項校園報修紀錄，此操作一經執行便無法復原。",
                 async () => {
-                    if (isCloudMode) {
-                        updateSyncStatus("清空雲端資料中...", "loading");
-                        try {
-                            // 讀取並清空雲端上的現有案件
-                            const repairsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'repairs');
-                            const querySnapshot = await getDocs(repairsCollection);
-                            const deletePromises = [];
-                            querySnapshot.forEach(docSnap => {
-                                deletePromises.push(deleteDoc(docSnap.ref));
-                            });
-                            await Promise.all(deletePromises);
-
-                            // 重新置入初始範例
-                            await seedInitialCloudData();
-                            showToast("雲端資料已重置為最初展示狀態！", "refresh-cw");
-                        } catch (error) {
-                            console.error(error);
-                            showToast("雲端資料重置失敗", "alert-triangle");
+                    const idx = localState.repairs.findIndex(r => r.id === id);
+                    if (idx !== -1) {
+                        localState.repairs.splice(idx, 1);
+                        if (isCloudConnected) {
+                            await deleteRepairFromCloud(id);
                         }
-                    } else {
-                        localStorage.removeItem('repair_records');
-                        localStorage.removeItem('sys_semesters');
-                        localStorage.removeItem('sys_locations');
-                        localStorage.removeItem('repair_admin');
-                        setupLocalStorageMode();
-                        showToast("本地資料已重設回最初範例狀態！", "refresh-cw");
+                        window.showToast("已成功刪除該報修紀錄", "success");
+                        refreshAllViews();
                     }
                 },
                 true
             );
-        }
+        };
 
-        // 自製精美 Toast 提示
-        let toastTimeout;
-        function showToast(message, iconName = "info") {
-            const toast = document.getElementById('custom-toast');
-            const toastMsg = document.getElementById('toast-message');
-            const toastIcon = document.getElementById('toast-icon');
+        window.addSemester = async function() {
+            const val = document.getElementById('new-semester-input').value.trim();
+            if (!val) {
+                window.showToast("學期內容不可為空", "error");
+                return;
+            }
+            if (localState.semesters.includes(val)) {
+                window.showToast("此學期參數已存在", "error");
+                return;
+            }
+            
+            localState.semesters.push(val);
+            document.getElementById('new-semester-input').value = '';
+            
+            if (isCloudConnected) {
+                await saveSettingsToCloud();
+            }
+            
+            window.showToast("新增學期參數成功", "success");
+            refreshAllViews();
+        };
 
-            if(!toast || !toastMsg || !toastIcon) return;
+        window.confirmDeleteSemester = function(semester) {
+            window.openConfirmModal(
+                "刪除學期參數",
+                `您確定要刪除「${semester}」學期設定嗎？這不會影響現有已建單的案件。`,
+                async () => {
+                    localState.semesters = localState.semesters.filter(s => s !== semester);
+                    if (isCloudConnected) {
+                        await saveSettingsToCloud();
+                    }
+                    window.showToast("已刪除學期參數", "success");
+                    refreshAllViews();
+                },
+                true
+            );
+        };
 
-            toastMsg.textContent = message;
-            toastIcon.setAttribute('data-lucide', iconName);
+        window.addLocation = async function() {
+            const val = document.getElementById('new-location-input').value.trim();
+            if (!val) {
+                window.showToast("大樓/區域內容不可為空", "error");
+                return;
+            }
+            if (localState.locations.includes(val)) {
+                window.showToast("此地點參數已存在", "error");
+                return;
+            }
+            
+            localState.locations.push(val);
+            document.getElementById('new-location-input').value = '';
+            
+            if (isCloudConnected) {
+                await saveSettingsToCloud();
+            }
+            
+            window.showToast("新增地點參數成功", "success");
+            refreshAllViews();
+        };
+
+        window.confirmDeleteLocation = function(locationName) {
+            window.openConfirmModal(
+                "刪除地點參數",
+                `您確定要刪除「${locationName}」大樓參數嗎？這不會影響現有案件。`,
+                async () => {
+                    localState.locations = localState.locations.filter(l => l !== locationName);
+                    if (isCloudConnected) {
+                        await saveSettingsToCloud();
+                    }
+                    window.showToast("已刪除地點參數", "success");
+                    refreshAllViews();
+                },
+                true
+            );
+        };
+
+        function renderSemestersAdmin() {
+            const container = document.getElementById('semesters-list-container');
+            if (localState.semesters.length === 0) {
+                container.innerHTML = `<span class="text-xs text-slate-400">目前沒有設定任何學期。</span>`;
+                return;
+            }
+            container.innerHTML = localState.semesters.map(s => `
+                <div class="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-lg text-sm">
+                    <span class="font-medium text-slate-700">${s}</span>
+                    <button onclick="confirmDeleteSemester('${s}')" class="text-red-500 hover:text-red-700 transition">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `).join('');
             lucide.createIcons();
-
-            // 滑出動畫
-            toast.classList.remove('translate-y-10', 'opacity-0', 'pointer-events-none');
-            toast.classList.add('translate-y-0', 'opacity-100');
-
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => {
-                toast.classList.add('translate-y-10', 'opacity-0', 'pointer-events-none');
-                toast.classList.remove('translate-y-0', 'opacity-100');
-            }, 3500);
         }
 
-        // 將模組內函數映射至全域物件 (解決 type="module" 底下 onClick 無法觸發之問題)
-        window.switchTab = switchTab;
-        window.handleFormSubmit = handleFormSubmit;
-        window.filterRepairs = filterRepairs;
-        window.handleAdminLogin = handleAdminLogin;
-        window.handleAdminLogout = handleAdminLogout;
-        window.addSemester = addSemester;
-        window.deleteSemester = deleteSemester;
-        window.addLocation = addLocation;
-        window.deleteLocation = deleteLocation;
-        window.openStatusModal = openStatusModal;
-        window.closeStatusModal = closeStatusModal;
-        window.saveStatusChanges = saveStatusChanges;
-        window.openChangePasswordModal = openChangePasswordModal;
-        window.closeChangePasswordModal = closeChangePasswordModal;
-        window.handlePasswordChange = handlePasswordChange;
-        window.closeConfirmModal = closeConfirmModal;
-        window.executeConfirmAction = executeConfirmAction;
-        window.confirmDeleteRepair = confirmDeleteRepair;
-        window.resetDemoData = resetDemoData;
+        function renderLocationsAdmin() {
+            const container = document.getElementById('locations-list-container');
+            if (localState.locations.length === 0) {
+                container.innerHTML = `<span class="text-xs text-slate-400">目前沒有設定任何地點。</span>`;
+                return;
+            }
+            container.innerHTML = localState.locations.map(l => `
+                <div class="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-lg text-sm">
+                    <span class="font-medium text-slate-700">${l}</span>
+                    <button onclick="confirmDeleteLocation('${l}')" class="text-red-500 hover:text-red-700 transition">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        // 重新設計為「清除/清空所有報修案件」，不重新載入任何範例
+        window.resetDemoData = function() {
+            window.openConfirmModal(
+                "確認清空所有報修案件？",
+                "您即將清除本系統資料庫內的所有報修通報與修復紀錄，此動作無法還原。系統將回復至乾淨初始狀態（但保留設定好的學期與地點參數）。",
+                async () => {
+                    localState.repairs = [];
+                    
+                    if (isCloudConnected && db) {
+                        try {
+                            const repairsCol = collection(db, 'artifacts', appId, 'public', 'data', 'repairs');
+                            const snapshot = await getDocs(repairsCol);
+                            for (const snapDoc of snapshot.docs) {
+                                await deleteDoc(snapDoc.ref);
+                            }
+                        } catch (e) {
+                            console.error("Cloud reset failed:", e);
+                        }
+                    }
+                    
+                    window.showToast("資料庫已徹底清空！目前無任何通報案件。", "success");
+                    refreshAllViews();
+                },
+                true
+            );
+        };
+
+        function refreshAllViews() {
+            renderFormDropdowns();
+            window.filterRepairs();
+            if (isLoggedIntoAdmin) {
+                refreshAdminViews();
+            }
+        }
+
+        function refreshAdminViews() {
+            updateStats();
+            window.renderAdminRepairs();
+            renderSemestersAdmin();
+            renderLocationsAdmin();
+        }
+
+        window.onload = function() {
+            window.switchTab('report');
+            renderFormDropdowns();
+            loadLocalDemoData();
+            initFirebaseAndSync();
+        };
     </script>
 </body>
 </html>
