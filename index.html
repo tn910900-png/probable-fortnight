@@ -3,28 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智慧校園報修與維護經費管理系統 - 自動 Email 通知版</title>
+    <title>智慧校園報修與維護經費管理系統 - 雙模自適應版</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- EmailJS SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght=300;400;500;700&display=swap');
         body {
             font-family: 'Noto Sans TC', sans-serif;
         }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white">
 
     <!-- 導覽列 -->
     <header class="bg-indigo-900 text-white shadow-lg sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
+                <!-- 標誌與狀態 -->
                 <div class="flex items-center space-x-3">
-                    <div class="bg-white p-2 rounded-lg text-indigo-900 shadow">
+                    <div class="bg-white p-2 rounded-xl text-indigo-900 shadow">
                         <i data-lucide="wrench" class="w-6 h-6"></i>
                     </div>
                     <div>
@@ -36,23 +50,26 @@
                                 <span id="cloud-status-text">初始化中...</span>
                             </div>
                         </div>
-                        <span class="text-xs text-indigo-200 block -mt-1">總務處經費與維護統計系統 · 自動 Email 通知版</span>
+                        <span class="text-xs text-indigo-200 block -mt-0.5">總務處經費與維護統計系統 · 雙模整合版</span>
                     </div>
                 </div>
                 
                 <!-- 頁籤切換 -->
-                <nav class="flex space-x-2 md:space-x-4">
-                    <button onclick="switchTab('report')" id="tab-report" class="tab-btn px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 bg-indigo-800 text-white shadow-inner flex items-center space-x-1">
+                <nav class="flex space-x-1 sm:space-x-2 md:space-x-3">
+                    <button onclick="switchTab('report')" id="tab-report" class="tab-btn px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 bg-indigo-800 text-white shadow-inner flex items-center space-x-1.5">
                         <i data-lucide="edit-3" class="w-4 h-4"></i>
-                        <span>師生報修</span>
+                        <span class="hidden sm:inline">師生報修</span>
+                        <span class="sm:hidden">報修</span>
                     </button>
-                    <button onclick="switchTab('search')" id="tab-search" class="tab-btn px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 text-indigo-100 hover:bg-indigo-800 flex items-center space-x-1">
+                    <button onclick="switchTab('search')" id="tab-search" class="tab-btn px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 text-indigo-100 hover:bg-indigo-800/80 flex items-center space-x-1.5">
                         <i data-lucide="search" class="w-4 h-4"></i>
-                        <span>進度查詢</span>
+                        <span class="hidden sm:inline">進度查詢</span>
+                        <span class="sm:hidden">查詢</span>
                     </button>
-                    <button onclick="switchTab('admin')" id="tab-admin" class="tab-btn px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 text-indigo-100 hover:bg-indigo-800 flex items-center space-x-1">
+                    <button onclick="switchTab('admin')" id="tab-admin" class="tab-btn px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 text-indigo-100 hover:bg-indigo-800/80 flex items-center space-x-1.5">
                         <i data-lucide="shield-check" class="w-4 h-4"></i>
-                        <span>管理後台</span>
+                        <span class="hidden sm:inline">管理後台</span>
+                        <span class="sm:hidden">後台</span>
                     </button>
                 </nav>
             </div>
@@ -62,24 +79,15 @@
     <!-- 核心內容區 -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        <!-- 師生報修分頁 (report) -->
+        <!-- 1. 師生報修分頁 (report) -->
         <section id="section-report" class="tab-section block">
             <div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100">
-                <div class="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white p-6 relative overflow-hidden">
-                    <div class="flex items-center justify-between relative z-10">
-                        <div>
-                            <h2 class="text-2xl font-bold flex items-center space-x-2">
-                                <i data-lucide="pen-tool" class="w-6 h-6"></i>
-                                <span>新建報修單</span>
-                            </h2>
-                            <p class="text-indigo-200 text-sm mt-1">請填寫詳細故障狀況，以便總務處維修人員迅速到場處理。</p>
-                        </div>
-                        <!-- Email 自動通知標籤 -->
-                        <div class="hidden sm:flex items-center space-x-1.5 bg-indigo-800/80 px-3 py-1.5 rounded-lg border border-indigo-600/50 text-xs text-indigo-100">
-                            <i data-lucide="mail-check" class="w-4 h-4 text-emerald-400"></i>
-                            <span>送出自動寄信給管理者</span>
-                        </div>
-                    </div>
+                <div class="bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 text-white p-6">
+                    <h2 class="text-2xl font-bold flex items-center space-x-2">
+                        <i data-lucide="pen-tool" class="w-6 h-6"></i>
+                        <span>新建校園報修單</span>
+                    </h2>
+                    <p class="text-indigo-200 text-sm mt-1">請詳細填寫故障狀況與地點，以便總務處派員派工維修。</p>
                 </div>
                 <form id="repair-form" onsubmit="handleFormSubmit(event)" class="p-6 sm:p-8 space-y-6">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -89,7 +97,7 @@
                                 <i data-lucide="user" class="w-4 h-4 mr-1 text-slate-400"></i>
                                 <span>報修人姓名 <span class="text-red-500">*</span></span>
                             </label>
-                            <input type="text" id="reporter" required placeholder="例如：王小明 老師/同學" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <input type="text" id="reporter" required placeholder="例如：王小明 老師/同學" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
                         </div>
 
                         <!-- 聯絡電話/分機 -->
@@ -98,7 +106,7 @@
                                 <i data-lucide="phone" class="w-4 h-4 mr-1 text-slate-400"></i>
                                 <span>聯絡電話/分機 <span class="text-red-500">*</span></span>
                             </label>
-                            <input type="text" id="contact" required placeholder="例如：0912-345678 或 #102" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <input type="text" id="contact" required placeholder="例如：0912-345678 或 #102" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
                         </div>
 
                         <!-- 學期設定 (動態連動) -->
@@ -107,7 +115,7 @@
                                 <i data-lucide="calendar" class="w-4 h-4 mr-1 text-slate-400"></i>
                                 <span>學期 <span class="text-red-500">*</span></span>
                             </label>
-                            <select id="form-semester" required class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                            <select id="form-semester" required class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition">
                                 <!-- 動態載入 -->
                             </select>
                         </div>
@@ -118,7 +126,7 @@
                                 <i data-lucide="tag" class="w-4 h-4 mr-1 text-slate-400"></i>
                                 <span>設備類別 <span class="text-red-500">*</span></span>
                             </label>
-                            <select id="form-category" required class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                            <select id="form-category" required class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition">
                                 <option value="水電類">水電類（水龍頭、照明、插座等）</option>
                                 <option value="泥作木工類">泥作木工類（門窗、桌椅、地板、天花板）</option>
                                 <option value="資訊設備類">資訊設備（電腦、投影機、網路、麥克風）</option>
@@ -133,7 +141,7 @@
                                 <i data-lucide="map-pin" class="w-4 h-4 mr-1 text-slate-400"></i>
                                 <span>報修大樓/區域 <span class="text-red-500">*</span></span>
                             </label>
-                            <select id="form-location" required class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                            <select id="form-location" required class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition">
                                 <!-- 動態載入 -->
                             </select>
                         </div>
@@ -144,7 +152,7 @@
                                 <i data-lucide="navigation" class="w-4 h-4 mr-1 text-slate-400"></i>
                                 <span>詳細位置/教室號碼 <span class="text-red-500">*</span></span>
                             </label>
-                            <input type="text" id="detail-location" required placeholder="例如：3F 302教室、辦公室門口" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <input type="text" id="detail-location" required placeholder="例如：3F 302教室、辦公室門口" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
                         </div>
                     </div>
 
@@ -154,42 +162,38 @@
                             <i data-lucide="file-text" class="w-4 h-4 mr-1 text-slate-400"></i>
                             <span>故障詳細狀況描述 <span class="text-red-500">*</span></span>
                         </label>
-                        <textarea id="description" required rows="4" placeholder="請詳細描述損壞情形。例如：天花板日光燈管閃爍不亮、水龍頭轉緊後仍不斷滴水..." class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                        <textarea id="description" required rows="4" placeholder="請詳細描述損壞情形。例如：天花板日光燈管閃爍不亮、水龍頭轉緊後仍不斷滴水..." class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"></textarea>
                     </div>
 
-                    <div class="border-t border-slate-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div class="text-xs text-slate-500 flex items-center space-x-1.5">
-                            <i data-lucide="shield-alert" class="w-4 h-4 text-amber-500 flex-shrink-0"></i>
-                            <span>新增通報送出後，系統將自動寄送信件給管理者通知。</span>
-                        </div>
-                        <button type="submit" id="submit-btn" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-2">
-                            <i data-lucide="send" class="w-5 h-5"></i>
-                            <span>送出報修單並通知管理者</span>
+                    <div class="border-t border-slate-100 pt-6 flex justify-end">
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-medium px-8 py-3 rounded-xl shadow-lg hover:shadow-indigo-200 transition-all duration-200 flex items-center space-x-2">
+                            <i data-lucide="check-circle" class="w-5 h-5"></i>
+                            <span>送出報修單</span>
                         </button>
                     </div>
                 </form>
             </div>
         </section>
 
-        <!-- 進度查詢分頁 (search) -->
+        <!-- 2. 進度查詢分頁 (search) -->
         <section id="section-search" class="tab-section hidden space-y-6">
             <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="relative flex-grow max-w-lg">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                         <i data-lucide="search" class="text-slate-400 w-5 h-5"></i>
                     </span>
-                    <input type="text" id="search-input" oninput="filterRepairs()" placeholder="輸入報修人姓名、地點或描述進行關鍵字搜尋..." class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="text" id="search-input" oninput="filterRepairs()" placeholder="輸入報修人姓名、地點或描述進行搜尋..." class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
                 </div>
                 
                 <!-- 篩選列 -->
-                <div class="flex flex-wrap gap-2">
-                    <select id="filter-semester" onchange="filterRepairs()" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="filter-semester" onchange="filterRepairs()" class="px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">所有學期</option>
                     </select>
-                    <select id="filter-location" onchange="filterRepairs()" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <select id="filter-location" onchange="filterRepairs()" class="px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">所有地點</option>
                     </select>
-                    <select id="filter-status" onchange="filterRepairs()" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <select id="filter-status" onchange="filterRepairs()" class="px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">所有狀態</option>
                         <option value="待處理">待處理</option>
                         <option value="處理中">處理中</option>
@@ -198,18 +202,18 @@
                 </div>
             </div>
 
-            <!-- 進度列表卡片 -->
+            <!-- 進度列表卡片容器 -->
             <div id="repair-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <!-- 動態載入卡片 -->
             </div>
         </section>
 
-        <!-- 管理後台分頁 (admin) -->
+        <!-- 3. 管理後台分頁 (admin) -->
         <section id="section-admin" class="tab-section hidden">
             <!-- 登入界面卡片 -->
             <div id="admin-login-card" class="max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 p-8 mt-12 block">
                 <div class="text-center mb-8">
-                    <div class="bg-indigo-100 inline-flex p-4 rounded-full text-indigo-700 mb-3">
+                    <div class="bg-indigo-100 inline-flex p-4 rounded-2xl text-indigo-700 mb-3">
                         <i data-lucide="lock" class="w-8 h-8"></i>
                     </div>
                     <h2 class="text-2xl font-bold text-slate-800">總務處管理登入</h2>
@@ -221,16 +225,16 @@
                             <i data-lucide="user" class="w-4 h-4 mr-1 text-slate-400"></i>
                             <span>管理者帳號</span>
                         </label>
-                        <input type="text" id="login-username" required placeholder="預設：admin" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <input type="text" id="login-username" required placeholder="預設：admin" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1 flex items-center">
                             <i data-lucide="key-round" class="w-4 h-4 mr-1 text-slate-400"></i>
                             <span>密碼</span>
                         </label>
-                        <input type="password" id="login-password" required placeholder="預設：admin1234" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <input type="password" id="login-password" required placeholder="預設：admin1234" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
-                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-all duration-200 shadow-md flex items-center justify-center space-x-2">
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-medium py-3 rounded-xl transition-all duration-200 shadow-md flex items-center justify-center space-x-2">
                         <i data-lucide="log-in" class="w-5 h-5"></i>
                         <span>登入後台</span>
                     </button>
@@ -246,21 +250,26 @@
                             <i data-lucide="shield" class="w-7 h-7 text-indigo-600"></i>
                             <span>總務處校園報修經費主控台</span>
                         </h2>
-                        <p class="text-slate-500 text-sm mt-1">負責案件管理、經費登錄與統計、管理者Email通知設定。</p>
+                        <p class="text-slate-500 text-sm mt-1">負責案件管理、經費登錄與統計、並修改系統設定（學期與地點）。</p>
                     </div>
-                    <div class="flex flex-wrap gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- 匯出報表按鈕 -->
+                        <button onclick="exportRepairsCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2.5 rounded-xl text-sm transition shadow flex items-center space-x-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>匯出報表 CSV</span>
+                        </button>
                         <!-- 修改密碼按鈕 -->
-                        <button onclick="openChangePasswordModal()" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-2 rounded-lg text-sm transition shadow flex items-center space-x-1">
+                        <button onclick="openChangePasswordModal()" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-2.5 rounded-xl text-sm transition shadow flex items-center space-x-1.5">
                             <i data-lucide="key-round" class="w-4 h-4"></i>
-                            <span>🔑 修改管理密碼</span>
+                            <span>修改管理密碼</span>
                         </button>
                         <!-- 清空報修案件按鈕 -->
-                        <button onclick="resetDemoData()" class="bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg text-sm transition shadow flex items-center space-x-1">
+                        <button onclick="resetDemoData()" class="bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-2.5 rounded-xl text-sm transition shadow flex items-center space-x-1.5">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                             <span>清空雲端報修案件</span>
                         </button>
                         <!-- 登出按鈕 -->
-                        <button onclick="handleAdminLogout()" class="bg-slate-600 hover:bg-slate-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition shadow flex items-center space-x-1">
+                        <button onclick="handleAdminLogout()" class="bg-slate-600 hover:bg-slate-700 text-white font-medium px-4 py-2.5 rounded-xl text-sm transition shadow flex items-center space-x-1.5">
                             <i data-lucide="log-out" class="w-4 h-4"></i>
                             <span>登出後台</span>
                         </button>
@@ -274,32 +283,32 @@
                             <span class="text-slate-400 text-sm font-medium">總報修件數</span>
                             <h3 id="stat-total" class="text-3xl font-bold text-slate-800 mt-1">0 件</h3>
                         </div>
-                        <div class="bg-indigo-100 text-indigo-700 p-3 rounded-xl"><i data-lucide="list" class="w-6 h-6"></i></div>
+                        <div class="bg-indigo-100 text-indigo-700 p-3.5 rounded-2xl"><i data-lucide="list" class="w-6 h-6"></i></div>
                     </div>
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
                         <div>
                             <span class="text-slate-400 text-sm font-medium">待維修件數</span>
                             <h3 id="stat-pending" class="text-3xl font-bold text-red-600 mt-1">0 件</h3>
                         </div>
-                        <div class="bg-red-100 text-red-700 p-3 rounded-xl"><i data-lucide="alert-circle" class="w-6 h-6"></i></div>
+                        <div class="bg-red-100 text-red-700 p-3.5 rounded-2xl"><i data-lucide="alert-circle" class="w-6 h-6"></i></div>
                     </div>
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
                         <div>
                             <span class="text-slate-400 text-sm font-medium">已修復完成</span>
                             <h3 id="stat-completed" class="text-3xl font-bold text-emerald-600 mt-1">0 件</h3>
                         </div>
-                        <div class="bg-emerald-100 text-emerald-700 p-3 rounded-xl"><i data-lucide="check-square" class="w-6 h-6"></i></div>
+                        <div class="bg-emerald-100 text-emerald-700 p-3.5 rounded-2xl"><i data-lucide="check-square" class="w-6 h-6"></i></div>
                     </div>
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
                         <div>
                             <span class="text-slate-400 text-sm font-medium">累計修繕經費</span>
                             <h3 id="stat-cost" class="text-3xl font-bold text-orange-600 mt-1">NT$ 0</h3>
                         </div>
-                        <div class="bg-orange-100 text-orange-700 p-3 rounded-xl"><i data-lucide="dollar-sign" class="w-6 h-6"></i></div>
+                        <div class="bg-orange-100 text-orange-700 p-3.5 rounded-2xl"><i data-lucide="dollar-sign" class="w-6 h-6"></i></div>
                     </div>
                 </div>
 
-                <!-- 分割大版面：左維修清單 / 右參數與 Email 管理 -->
+                <!-- 分割大版面：左維修清單 / 右參數管理 -->
                 <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
                     <!-- 左方案件管理列表 (佔寬度 2/3) -->
                     <div class="xl:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -310,7 +319,7 @@
                             </h3>
                             <!-- 後台篩選 -->
                             <div class="flex flex-wrap gap-2 text-xs">
-                                <select id="admin-filter-status" onchange="renderAdminRepairs()" class="px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:outline-none">
+                                <select id="admin-filter-status" onchange="renderAdminRepairs()" class="px-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:outline-none">
                                     <option value="">所有狀態</option>
                                     <option value="待處理">待處理</option>
                                     <option value="處理中">處理中</option>
@@ -323,7 +332,7 @@
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
                                 <thead>
-                                    <tr class="bg-slate-100/50 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b border-slate-100">
+                                    <tr class="bg-slate-100/60 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b border-slate-100">
                                         <th class="px-6 py-4">報修項目/時間</th>
                                         <th class="px-6 py-4">地點 & 學期</th>
                                         <th class="px-6 py-4">狀態</th>
@@ -338,70 +347,9 @@
                         </div>
                     </div>
 
-                    <!-- 右方系統設定與 Email 管理區域 (佔寬度 1/3) -->
+                    <!-- 右方系統設定與修改區域 (佔寬度 1/3) -->
                     <div class="space-y-6">
-                        <!-- 1. 新增通報 Email 自動通知設定卡片 -->
-                        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="font-bold text-lg text-slate-800 flex items-center space-x-2">
-                                    <i data-lucide="mail" class="w-5 h-5 text-indigo-600"></i>
-                                    <span>管理者 Email 通知設定</span>
-                                </h3>
-                                <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-0.5 rounded-full font-medium flex items-center">
-                                    <i data-lucide="bell" class="w-3 h-3 mr-1"></i> 即時寄送
-                                </span>
-                            </div>
-
-                            <form onsubmit="handleEmailSettingsSave(event)" class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1 flex items-center justify-between">
-                                        <span>接收通知之管理者 Email</span>
-                                        <span class="text-xs text-indigo-600 font-normal">通報時自動寄出</span>
-                                    </label>
-                                    <input type="email" id="email-setting-admin" required placeholder="例如：ga_office@school.edu.tw" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                                </div>
-
-                                <div class="flex items-center justify-between pt-1">
-                                    <span class="text-sm font-medium text-slate-700">啟用新增報修 Email 通知</span>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="email-setting-enabled" class="sr-only peer" checked>
-                                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                                    </label>
-                                </div>
-
-                                <!-- EmailJS API 金鑰設定區塊 (展開可選) -->
-                                <div class="border-t border-slate-100 pt-3">
-                                    <button type="button" onclick="toggleEmailJsConfig()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center space-x-1">
-                                        <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
-                                        <span>進階 EmailJS 服務參數設定 (選填)</span>
-                                    </button>
-                                    <div id="emailjs-config-box" class="hidden mt-3 space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
-                                        <p class="text-slate-500 leading-relaxed">
-                                            系統預設採用模擬與 Fetch REST API 發送通知。若欲使用個人 EmailJS 服務發送實體郵件，請設定以下金鑰：
-                                        </p>
-                                        <div>
-                                            <label class="block font-medium text-slate-700 mb-0.5">EmailJS Public Key</label>
-                                            <input type="text" id="emailjs-public-key" placeholder="例如：user_xxxxxxxxx" class="w-full px-2.5 py-1.5 border border-slate-200 rounded bg-white focus:outline-none">
-                                        </div>
-                                        <div>
-                                            <label class="block font-medium text-slate-700 mb-0.5">EmailJS Service ID</label>
-                                            <input type="text" id="emailjs-service-id" placeholder="例如：service_repair" class="w-full px-2.5 py-1.5 border border-slate-200 rounded bg-white focus:outline-none">
-                                        </div>
-                                        <div>
-                                            <label class="block font-medium text-slate-700 mb-0.5">EmailJS Template ID</label>
-                                            <input type="text" id="emailjs-template-id" placeholder="例如：template_new_report" class="w-full px-2.5 py-1.5 border border-slate-200 rounded bg-white focus:outline-none">
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium py-2 rounded-lg transition shadow flex items-center justify-center space-x-1.5">
-                                    <i data-lucide="save" class="w-4 h-4"></i>
-                                    <span>儲存 Email 設定</span>
-                                </button>
-                            </form>
-                        </div>
-
-                        <!-- 2. 學期設定管理區 -->
+                        <!-- 1. 學期設定管理區 -->
                         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                             <h3 class="font-bold text-lg text-slate-800 flex items-center space-x-2 mb-4">
                                 <i data-lucide="calendar" class="w-5 h-5 text-indigo-600"></i>
@@ -409,8 +357,8 @@
                             </h3>
                             <!-- 新增學期 -->
                             <div class="flex gap-2 mb-4">
-                                <input type="text" id="new-semester-input" placeholder="例如：115學年度 第二學期" class="flex-grow px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                                <button onclick="addSemester()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow flex items-center space-x-1">
+                                <input type="text" id="new-semester-input" placeholder="例如：115學年度 第二學期" class="flex-grow px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <button onclick="addSemester()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow flex items-center space-x-1">
                                     <i data-lucide="plus" class="w-4 h-4"></i>
                                     <span>新增</span>
                                 </button>
@@ -422,7 +370,7 @@
                             </div>
                         </div>
 
-                        <!-- 3. 報修地點管理區 -->
+                        <!-- 2. 報修地點管理區 -->
                         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                             <h3 class="font-bold text-lg text-slate-800 flex items-center space-x-2 mb-4">
                                 <i data-lucide="map" class="w-5 h-5 text-indigo-600"></i>
@@ -430,8 +378,8 @@
                             </h3>
                             <!-- 新增地點 -->
                             <div class="flex gap-2 mb-4">
-                                <input type="text" id="new-location-input" placeholder="例如：科學大樓、操場" class="flex-grow px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                                <button onclick="addLocation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow flex items-center space-x-1">
+                                <input type="text" id="new-location-input" placeholder="例如：科學大樓、操場" class="flex-grow px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                                <button onclick="addLocation()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow flex items-center space-x-1">
                                     <i data-lucide="plus" class="w-4 h-4"></i>
                                     <span>新增</span>
                                 </button>
@@ -471,7 +419,7 @@
                 <input type="hidden" id="modal-repair-id">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">處置進度狀態</label>
-                    <select id="modal-status" class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                    <select id="modal-status" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
                         <option value="待處理">待處理</option>
                         <option value="處理中">處理中</option>
                         <option value="已完成">已完成</option>
@@ -479,16 +427,16 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">修復花費經費 (NT$)</label>
-                    <input type="number" id="modal-cost" min="0" placeholder="尚未產生經費請輸入 0" class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="number" id="modal-cost" min="0" placeholder="尚未產生經費請輸入 0" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">備註 / 處理說明</label>
-                    <textarea id="modal-note" rows="3" placeholder="例如：已聯絡外包水電於明日來維修、已更換日光燈管等..." class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    <textarea id="modal-note" rows="3" placeholder="例如：已聯絡外包水電於明日來維修、已更換日光燈管等..." class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
                 </div>
             </div>
             <div class="p-5 bg-slate-50 border-t border-slate-100 flex justify-end space-x-2">
-                <button onclick="closeStatusModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition">取消</button>
-                <button onclick="saveStatusChanges()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition shadow-md">儲存設定</button>
+                <button onclick="closeStatusModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-xl text-sm transition">取消</button>
+                <button onclick="saveStatusChanges()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-xl text-sm transition shadow-md">儲存設定</button>
             </div>
         </div>
     </div>
@@ -506,15 +454,15 @@
             <form onsubmit="handlePasswordChange(event)" class="p-6 space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">新的管理者帳號</label>
-                    <input type="text" id="new-admin-username" required class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="text" id="new-admin-username" required class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">設定新密碼</label>
-                    <input type="password" id="new-admin-password" required placeholder="請輸入高強度新密碼" class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="password" id="new-admin-password" required placeholder="請輸入高強度新密碼" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div class="pt-2 flex justify-end space-x-2">
-                    <button type="button" onclick="closeChangePasswordModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition">取消</button>
-                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition shadow-md">保存新設定</button>
+                    <button type="button" onclick="closeChangePasswordModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-xl text-sm transition">取消</button>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-xl text-sm transition shadow-md">保存新設定</button>
                 </div>
             </form>
         </div>
@@ -530,8 +478,8 @@
                 <h4 class="font-bold text-xl text-slate-800 mb-2" id="confirm-modal-title">確定要執行此操作？</h4>
                 <p class="text-slate-500 text-sm mb-6" id="confirm-modal-message">此動作無法還原，請謹慎確認。</p>
                 <div class="flex justify-center space-x-3">
-                    <button onclick="closeConfirmModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2.5 rounded-lg text-sm transition">取消</button>
-                    <button id="confirm-modal-action-btn" onclick="executeConfirmAction()" class="bg-red-600 hover:bg-red-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition shadow-md">確定</button>
+                    <button onclick="closeConfirmModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2.5 rounded-xl text-sm transition">取消</button>
+                    <button id="confirm-modal-action-btn" onclick="executeConfirmAction()" class="bg-red-600 hover:bg-red-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition shadow-md">確定</button>
                 </div>
             </div>
         </div>
@@ -565,7 +513,7 @@
         let isCloudConnected = false;
         let unsubRepairs = null;
 
-        // 本機記憶體資料庫 (包含 Email 通知設定)
+        // 本機記憶體資料庫
         let localState = {
             repairs: [],
             semesters: ["114學年度 第二學期", "115學年度 第一學期", "115學年度 第二學期"],
@@ -573,13 +521,6 @@
             admin: {
                 username: "admin",
                 password: "admin1234"
-            },
-            emailSettings: {
-                adminEmail: "admin@school.edu.tw",
-                enabled: true,
-                publicKey: "",
-                serviceId: "",
-                templateId: ""
             }
         };
 
@@ -605,7 +546,7 @@
             
             setTimeout(() => {
                 toast.className = "fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-2xl z-50 flex items-center space-x-2 transform translate-y-10 opacity-0 pointer-events-none transition-all duration-300";
-            }, 3500);
+            }, 3000);
         };
 
         let confirmCallback = null;
@@ -619,11 +560,11 @@
             const icon = document.getElementById('confirm-modal-icon');
             
             if (isDangerous) {
-                btn.className = "bg-red-600 hover:bg-red-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition shadow-md";
+                btn.className = "bg-red-600 hover:bg-red-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition shadow-md";
                 iconContainer.className = "bg-red-100 text-red-600 inline-flex p-4 rounded-full mb-4";
                 icon.setAttribute('data-lucide', 'alert-triangle');
             } else {
-                btn.className = "bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition shadow-md";
+                btn.className = "bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition shadow-md";
                 iconContainer.className = "bg-indigo-100 text-indigo-600 inline-flex p-4 rounded-full mb-4";
                 icon.setAttribute('data-lucide', 'info');
             }
@@ -692,19 +633,16 @@
             const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
             const adminDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'admin', 'credentials');
             
-            // 1. 同步參數設定 (包含 Email 設定)
+            // 1. 同步參數設定
             try {
                 const settingsSnap = await getDoc(settingsDocRef);
                 if (settingsSnap.exists()) {
-                    const data = settingsSnap.data();
-                    localState.semesters = data.semesters || localState.semesters;
-                    localState.locations = data.locations || localState.locations;
-                    localState.emailSettings = Object.assign({}, localState.emailSettings, data.emailSettings || {});
+                    localState.semesters = settingsSnap.data().semesters || [];
+                    localState.locations = settingsSnap.data().locations || [];
                 } else {
                     await setDoc(settingsDocRef, {
                         semesters: localState.semesters,
-                        locations: localState.locations,
-                        emailSettings: localState.emailSettings
+                        locations: localState.locations
                     });
                 }
             } catch (e) {
@@ -723,7 +661,7 @@
                 console.error("Failed to sync admin credentials:", e);
             }
             
-            // 3. 同步即時報修清單
+            // 3. 同步並訂閱即時報修清單
             try {
                 const initialSnap = await getDocs(repairsCol);
                 if (initialSnap.empty) {
@@ -778,8 +716,7 @@
                 const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
                 await setDoc(settingsDocRef, {
                     semesters: localState.semesters,
-                    locations: localState.locations,
-                    emailSettings: localState.emailSettings
+                    locations: localState.locations
                 });
             } catch (e) {
                 console.error("Cloud save settings failed:", e);
@@ -796,64 +733,18 @@
             }
         }
 
-        // 關鍵核心功能：發送 Email 給管理者
-        async function sendAdminEmailNotification(repairData) {
-            const es = localState.emailSettings;
-            if (!es.enabled) {
-                console.log("Email notification is disabled in settings.");
-                return { success: true, method: "disabled" };
-            }
-
-            const targetEmail = es.adminEmail || "admin@school.edu.tw";
-            const reportTime = new Date(repairData.createdAt).toLocaleString('zh-TW');
-
-            const templateParams = {
-                to_email: targetEmail,
-                reporter_name: repairData.reporter,
-                contact: repairData.contact,
-                semester: repairData.semester,
-                category: repairData.category,
-                location: `${repairData.location} (${repairData.detailLocation})`,
-                description: repairData.description,
-                report_time: reportTime,
-                message: `【智慧校園報修系統】收到新的通報：\n報修人：${repairData.reporter} (${repairData.contact})\n地點：${repairData.location} ${repairData.detailLocation}\n類別：${repairData.category}\n內容：${repairData.description}\n時間：${reportTime}`
-            };
-
-            // 如果管理者填寫了 EmailJS API 金鑰，呼叫實體 EmailJS 服務
-            if (es.publicKey && es.serviceId && es.templateId && window.emailjs) {
-                try {
-                    emailjs.init(es.publicKey);
-                    await emailjs.send(es.serviceId, es.templateId, templateParams);
-                    console.log("EmailJS sent successfully to:", targetEmail);
-                    return { success: true, method: "emailjs" };
-                } catch (err) {
-                    console.error("EmailJS sending error:", err);
-                }
-            }
-
-            // 備用 / 預設模式：使用 Fetch REST API 模擬即時郵件發送服務
-            try {
-                // 呼叫公開郵件廣播介面/Log記錄
-                console.log(`[Email Dispatcher] 發送 Email 給管理者 [${targetEmail}]:`, templateParams);
-                return { success: true, method: "simulated", recipient: targetEmail };
-            } catch (err) {
-                console.error("Email API failed:", err);
-                return { success: false, error: err };
-            }
-        }
-
         function getCategoryIcon(category) {
             switch (category) {
                 case "水電類":
-                    return `<div class="bg-blue-50 text-blue-600 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-blue-100"><i data-lucide="droplets" class="w-5 h-5"></i></div>`;
+                    return `<div class="bg-blue-50 text-blue-600 p-2.5 rounded-xl flex items-center justify-center h-10 w-10 border border-blue-100"><i data-lucide="droplets" class="w-5 h-5"></i></div>`;
                 case "泥作木工類":
-                    return `<div class="bg-amber-50 text-amber-700 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-amber-100"><i data-lucide="hammer" class="w-5 h-5"></i></div>`;
+                    return `<div class="bg-amber-50 text-amber-700 p-2.5 rounded-xl flex items-center justify-center h-10 w-10 border border-amber-100"><i data-lucide="hammer" class="w-5 h-5"></i></div>`;
                 case "資訊設備類":
-                    return `<div class="bg-purple-50 text-purple-600 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-purple-100"><i data-lucide="monitor" class="w-5 h-5"></i></div>`;
+                    return `<div class="bg-purple-50 text-purple-600 p-2.5 rounded-xl flex items-center justify-center h-10 w-10 border border-purple-100"><i data-lucide="monitor" class="w-5 h-5"></i></div>`;
                 case "空調冷氣":
-                    return `<div class="bg-cyan-50 text-cyan-600 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-cyan-100"><i data-lucide="wind" class="w-5 h-5"></i></div>`;
+                    return `<div class="bg-cyan-50 text-cyan-600 p-2.5 rounded-xl flex items-center justify-center h-10 w-10 border border-cyan-100"><i data-lucide="wind" class="w-5 h-5"></i></div>`;
                 default:
-                    return `<div class="bg-slate-50 text-slate-600 p-2 rounded-xl flex items-center justify-center h-10 w-10 border border-slate-200"><i data-lucide="help-circle" class="w-5 h-5"></i></div>`;
+                    return `<div class="bg-slate-50 text-slate-600 p-2.5 rounded-xl flex items-center justify-center h-10 w-10 border border-slate-200"><i data-lucide="help-circle" class="w-5 h-5"></i></div>`;
             }
         }
 
@@ -891,18 +782,6 @@
             if (selFormLocation && localState.locations.includes(selFormLocation)) formLocation.value = selFormLocation;
             if (selFilterSemester && localState.semesters.includes(selFilterSemester)) filterSemester.value = selFilterSemester;
             if (selFilterLocation && localState.locations.includes(selFilterLocation)) filterLocation.value = selFilterLocation;
-
-            // 帶入 Email 設定到後台表單
-            const adminEmailInput = document.getElementById('email-setting-admin');
-            const emailEnabledCheck = document.getElementById('email-setting-enabled');
-            if (adminEmailInput) adminEmailInput.value = localState.emailSettings.adminEmail || "admin@school.edu.tw";
-            if (emailEnabledCheck) emailEnabledCheck.checked = localState.emailSettings.enabled !== false;
-            
-            if (document.getElementById('emailjs-public-key')) {
-                document.getElementById('emailjs-public-key').value = localState.emailSettings.publicKey || "";
-                document.getElementById('emailjs-service-id').value = localState.emailSettings.serviceId || "";
-                document.getElementById('emailjs-template-id').value = localState.emailSettings.templateId || "";
-            }
         }
 
         function renderCards(repairsToRender) {
@@ -914,7 +793,7 @@
                             <i data-lucide="clipboard-x" class="w-8 h-8"></i>
                         </div>
                         <h3 class="font-bold text-slate-700 text-lg">目前尚無任何報修紀錄</h3>
-                        <p class="text-slate-400 text-sm mt-1">請填寫左上角「師生報修」單，提交新的報修申請。</p>
+                        <p class="text-slate-400 text-sm mt-1">請填寫「師生報修」單，提交新的校園報修申請。</p>
                     </div>
                 `;
                 lucide.createIcons();
@@ -928,14 +807,14 @@
                 });
                 
                 const costSection = r.status === "已完成" 
-                    ? `<div class="mt-3 flex items-center justify-between text-xs border-t border-slate-100 pt-2 bg-emerald-50/20 px-3 py-1.5 rounded-lg border border-emerald-100/30">
+                    ? `<div class="mt-3 flex items-center justify-between text-xs border-t border-slate-100 pt-2 bg-emerald-50/30 px-3 py-1.5 rounded-xl border border-emerald-100/50">
                          <span class="text-emerald-800 font-medium flex items-center"><i data-lucide="dollar-sign" class="w-3.5 h-3.5 mr-0.5"></i>修復經費:</span>
                          <span class="font-bold text-emerald-600">NT$ ${r.cost.toLocaleString()}</span>
                        </div>`
                     : '';
                     
                 const noteSection = r.note 
-                    ? `<div class="mt-3 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    ? `<div class="mt-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                          <span class="text-[11px] font-semibold text-slate-400 block mb-1">總務處處理備註：</span>
                          <p class="text-xs text-slate-600 leading-relaxed">${r.note}</p>
                        </div>`
@@ -995,24 +874,17 @@
             
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('bg-indigo-800', 'text-white', 'shadow-inner');
-                btn.classList.add('text-indigo-100', 'hover:bg-indigo-800');
+                btn.classList.add('text-indigo-100', 'hover:bg-indigo-800/80');
             });
             
             const activeBtn = document.getElementById(`tab-${tabId}`);
             activeBtn.classList.add('bg-indigo-800', 'text-white', 'shadow-inner');
-            activeBtn.classList.remove('text-indigo-100', 'hover:bg-indigo-800');
+            activeBtn.classList.remove('text-indigo-100', 'hover:bg-indigo-800/80');
         };
 
         window.handleFormSubmit = async function(e) {
             e.preventDefault();
             
-            const submitBtn = document.getElementById('submit-btn');
-            const originalBtnContent = submitBtn.innerHTML;
-            
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i><span>處理中與寄出信件中...</span>`;
-            lucide.createIcons();
-
             const reporter = document.getElementById('reporter').value.trim();
             const contact = document.getElementById('contact').value.trim();
             const semester = document.getElementById('form-semester').value;
@@ -1043,21 +915,8 @@
                 await saveRepairToCloud(newRepair);
             }
             
-            // 觸發 Email 通知管理者
-            const emailResult = await sendAdminEmailNotification(newRepair);
-            
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalBtnContent;
-            lucide.createIcons();
-
             document.getElementById('repair-form').reset();
-            
-            if (emailResult.success) {
-                window.showToast(`報修單已提交！已寄送 Email 通知給管理者 (${localState.emailSettings.adminEmail})`, "success");
-            } else {
-                window.showToast("報修單提交成功！請至進度查詢查看狀況。", "success");
-            }
-            
+            window.showToast("報修單提交成功！已進入進度排程中。", "success");
             window.switchTab('search');
         };
 
@@ -1110,35 +969,6 @@
             document.getElementById('admin-dashboard-content').classList.add('hidden');
             document.getElementById('login-password').value = '';
             window.showToast("已安全登出後台系統", "info");
-        };
-
-        window.toggleEmailJsConfig = function() {
-            const box = document.getElementById('emailjs-config-box');
-            box.classList.toggle('hidden');
-        };
-
-        window.handleEmailSettingsSave = async function(e) {
-            e.preventDefault();
-            const adminEmail = document.getElementById('email-setting-admin').value.trim();
-            const enabled = document.getElementById('email-setting-enabled').checked;
-            
-            const publicKey = document.getElementById('emailjs-public-key').value.trim();
-            const serviceId = document.getElementById('emailjs-service-id').value.trim();
-            const templateId = document.getElementById('emailjs-template-id').value.trim();
-
-            localState.emailSettings = {
-                adminEmail,
-                enabled,
-                publicKey,
-                serviceId,
-                templateId
-            };
-
-            if (isCloudConnected) {
-                await saveSettingsToCloud();
-            }
-
-            window.showToast("管理者 Email 通知設定儲存成功！", "success");
         };
 
         window.openChangePasswordModal = function() {
@@ -1221,7 +1051,7 @@
                         <td class="px-6 py-4">
                             <div class="text-slate-700 font-medium">${r.location}</div>
                             <div class="text-xs text-slate-400">${r.detailLocation}</div>
-                            <span class="inline-block mt-2 text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${r.semester}</span>
+                            <span class="inline-block mt-2 text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">${r.semester}</span>
                         </td>
                         <td class="px-6 py-4">
                             ${getStatusBadge(r.status)}
@@ -1388,7 +1218,7 @@
                 return;
             }
             container.innerHTML = localState.semesters.map(s => `
-                <div class="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-lg text-sm">
+                <div class="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-sm">
                     <span class="font-medium text-slate-700">${s}</span>
                     <button onclick="confirmDeleteSemester('${s}')" class="text-red-500 hover:text-red-700 transition">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -1405,7 +1235,7 @@
                 return;
             }
             container.innerHTML = localState.locations.map(l => `
-                <div class="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-lg text-sm">
+                <div class="flex items-center justify-between bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-sm">
                     <span class="font-medium text-slate-700">${l}</span>
                     <button onclick="confirmDeleteLocation('${l}')" class="text-red-500 hover:text-red-700 transition">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -1414,6 +1244,34 @@
             `).join('');
             lucide.createIcons();
         }
+
+        // CSV 匯出功能
+        window.exportRepairsCSV = function() {
+            if (localState.repairs.length === 0) {
+                window.showToast("目前尚無案件可供匯出", "error");
+                return;
+            }
+            
+            let csvContent = "\uFEFF"; // UTF-8 BOM
+            csvContent += "報修編號,報修人,聯絡電話,學期,設備類別,地點,詳細位置,故障描述,狀態,修復經費(NT$),處理備註,建立時間\n";
+            
+            localState.repairs.forEach(r => {
+                const timeStr = new Date(r.createdAt).toLocaleString('zh-TW');
+                const cleanDesc = `"${(r.description || '').replace(/"/g, '""')}"`;
+                const cleanNote = `"${(r.note || '').replace(/"/g, '""')}"`;
+                csvContent += `${r.id},${r.reporter},${r.contact},${r.semester},${r.category},${r.location},${r.detailLocation},${cleanDesc},${r.status},${r.cost || 0},${cleanNote},${timeStr}\n`;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `校園維護報修統計表_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.showToast("報表 CSV 匯出成功！", "success");
+        };
 
         window.resetDemoData = function() {
             window.openConfirmModal(
